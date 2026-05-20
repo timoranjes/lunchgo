@@ -671,12 +671,19 @@
       }
       try {
         // Enhanced query: nwr (node+way+relation) + more amenity types
-        const query = '[out:json][timeout:30];(nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="restaurant"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="fast_food"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="cafe"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="food_court"];);out center tags;';
-        const resp = await fetch('https://overpass-api.de/api/interpreter', {
-          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'data=' + encodeURIComponent(query),
-        });
-        if (!resp.ok) throw new Error('API error');
+        const query = '[out:json][timeout:25];(nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="restaurant"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="fast_food"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="cafe"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="food_court"];);out center qt;';
+        const endpoints = ['https://overpass-api.de/api/interpreter', 'https://overpass.openstreetmap.fr/api/interpreter'];
+        let resp = null;
+        for (const ep of endpoints) {
+          try {
+            resp = await fetch(ep, {
+              method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: 'data=' + encodeURIComponent(query),
+            });
+            if (resp.ok) break;
+          } catch (_) { resp = null; }
+        }
+        if (!resp || !resp.ok) throw new Error('All Overpass endpoints failed');
         const data = await resp.json(); const restaurants = [];
         for (const elem of (data.elements || [])) {
           const tags = elem.tags || {}; const name = tags['name:zh'] || tags.name; if (!name) continue;
@@ -701,8 +708,13 @@
         updateLocationDisplay(); if (state.mapView === 'map' && state.map) renderMapMarkers();
       } catch (e) {
         console.error('Failed to fetch restaurants:', e);
-        if (cache) { state.restaurants = cache.restaurants.map(r => ({ ...r, distance: haversine(loc.lat, loc.lng, r.lat, r.lng), timeToTable: estimateTime(r) })); }
-        else { state.restaurants = []; }
+        if (cache) {
+          state.restaurants = cache.restaurants.map(r => ({ ...r, distance: haversine(loc.lat, loc.lng, r.lat, r.lng), timeToTable: estimateTime(r) }));
+          document.getElementById('list-container').innerHTML = '<div class="empty" style="color:#e67e22;">網路連線不佳，顯示離線資料</div>' + document.getElementById('list-container').innerHTML;
+        } else {
+          state.restaurants = [];
+          document.getElementById('list-container').innerHTML = '<div class="empty">無法取得餐廳資料，請稍後再試</div>';
+        }
       }
       state.loading = false;
     }
@@ -879,7 +891,10 @@
       document.getElementById('view-map-btn').classList.toggle('active', view === 'map');
       document.getElementById('map-container').classList.toggle('show', view === 'map');
       document.getElementById('list-container-wrapper').classList.toggle('show', view === 'list');
-      if (view === 'map' && state.map) setTimeout(() => { state.map.invalidateSize(); renderMapMarkers(); }, 100);
+      if (view === 'map') {
+        if (!state.map) { initMap(); }
+        setTimeout(() => { state.map.invalidateSize(); renderMapMarkers(); }, 200);
+      }
     }
 
     function initMap() {
