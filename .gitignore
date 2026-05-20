@@ -1,0 +1,9 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+
+# Old data (keep data/hk_restaurants.json in git)
+restaurants_hk.json

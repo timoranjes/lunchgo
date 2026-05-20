@@ -465,6 +465,10 @@
       <div class="card">
         <div class="rec-name" id="detail-name" style="margin-bottom:10px;"></div>
         <div class="rec-details" id="detail-info" style="margin-bottom:10px;"></div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+          <span id="detail-district" class="tag" style="display:none;"></span>
+          <span id="detail-licence" class="tag" style="display:none;background:#E8F5E9;color:#2E7D32;"></span>
+        </div>
         <div class="detail-section">
           <div class="detail-label">地址</div>
           <div class="list-meta" id="detail-address"></div>
@@ -612,6 +616,8 @@
     // ========== Cuisine Mapping ==========
     function mapCuisine(raw) { if (!raw) return 'other'; const lower = raw.toLowerCase(); for (const key of Object.keys(CUISINE_MAP)) { if (lower.includes(key)) return key; } return 'other'; }
     function cuisineDisplay(raw) { const key = mapCuisine(raw); const info = CUISINE_MAP[key]; return info ? info.label : raw || '其他'; }
+    function restName(r) { return r.name_tc || r.name || r.name_en || '未知餐廳'; }
+    function restNameSub(r) { const tc = r.name_tc; const en = r.name_en; if (tc && en) return en; if (!tc && r.name && en && r.name !== en) return en; return ''; }
 
     // ========== Location ==========
     function showLocationModal() {
@@ -655,68 +661,112 @@
       const cache = Store.getRestaurantsCache();
       if (cache && cache.locId === loc.id) {
         const age = Math.round((Date.now() - cache.cachedAt) / 60000);
-        document.getElementById('loc-display-sub').textContent = cache.count + ' 家 · ' + age + '分鐘前';
+        const sourceLabel = cache.source === 'overpass-live' ? 'OSM' : (cache.source || '').startsWith('pre-processed') ? 'FEHD+OSM' : '快取';
+        document.getElementById('loc-display-sub').textContent = cache.count + ' 家 · ' + age + '分鐘前 · ' + sourceLabel;
       } else { document.getElementById('loc-display-sub').textContent = ''; }
     }
 
     // ========== Restaurant Database ==========
+    // Data source priority: pre-processed JSON > localStorage cache > Overpass API
+    const DATA_URL = 'data/hk_restaurants.json';
+
     async function loadRestaurants() {
       if (state.loading) return; const loc = state.currentLocation; if (!loc) { document.getElementById('list-container').innerHTML = '<div class="empty">請先選擇地點</div>'; return; }
       state.loading = true; document.getElementById('list-container').innerHTML = '<div class="loading"><div class="loading-spinner"></div><br>載入餐廳...</div>';
       const prefs = Store.getPrefs(); const radius = prefs.radius || 1000;
+
+      // Try cache first (24h freshness)
       const cache = Store.getRestaurantsCache();
       if (cache && cache.locId === loc.id && (Date.now() - cache.cachedAt) < 24 * 3600 * 1000) {
-        state.restaurants = cache.restaurants.map(r => ({ ...r, distance: haversine(loc.lat, loc.lng, r.lat, r.lng), timeToTable: estimateTime(r) }));
-        state.loading = false; updateLocationDisplay(); if (state.mapView === 'map' && state.map) renderMapMarkers(); return;
+        state.restaurants = filterByRadius(cache.restaurants, loc, radius);
+        state.restaurants = state.restaurants.map(r => ({ ...r, distance: haversine(loc.lat, loc.lng, r.lat, r.lng), timeToTable: estimateTime(r) }));
+        state.loading = false; updateLocationDisplay(); renderList(); if (state.mapView === 'map' && state.map) renderMapMarkers(); return;
       }
+
+      let restaurants = [];
+      let dataSource = '';
+
+      // Strategy 1: Load pre-processed JSON (GitHub Actions daily update)
       try {
-        // Enhanced query: nwr (node+way+relation) + more amenity types
-        const query = '[out:json][timeout:25];(nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="restaurant"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="fast_food"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="cafe"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="food_court"];);out center qt;';
-        const endpoints = ['https://overpass-api.de/api/interpreter', 'https://overpass.openstreetmap.fr/api/interpreter'];
-        let resp = null;
-        for (const ep of endpoints) {
-          try {
-            resp = await fetch(ep, {
-              method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: 'data=' + encodeURIComponent(query),
-            });
-            if (resp.ok) break;
-          } catch (_) { resp = null; }
+        const resp = await fetch(DATA_URL + '?_t=' + Date.now());
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.restaurants && data.restaurants.length > 0) {
+            restaurants = data.restaurants.filter(r => r.lat && r.lng);
+            dataSource = 'pre-processed (' + data.total + ' total, ' + restaurants.length + ' with coords)';
+            console.log('[LunchGo] Loaded pre-processed data:', dataSource);
+          }
         }
-        if (!resp || !resp.ok) throw new Error('All Overpass endpoints failed');
-        const data = await resp.json(); const restaurants = [];
-        for (const elem of (data.elements || [])) {
-          const tags = elem.tags || {}; const name = tags['name:zh'] || tags.name; if (!name) continue;
-          restaurants.push({
-            id: 'osm_' + elem.id + (elem.type === 'way' ? 'w' : elem.type === 'relation' ? 'r' : ''),
-            name: name, name_en: tags['name:en'] || '',
-            lat: elem.lat || (elem.center && elem.center.lat) || 0,
-            lng: elem.lon || (elem.center && elem.center.lon) || 0,
-            cuisine: tags.cuisine || '', phone: tags.phone || tags['contact:phone'] || '',
-            website: tags.website || tags['contact:website'] || '',
-            address: tags['addr:full'] || tags['addr:street'] || '',
-            opening_hours: tags.opening_hours || '', amenity: tags.amenity || 'restaurant',
-            operator: tags.operator || '', brand: tags.brand || '', level: tags.level || '',
-            wheelchair: tags.wheelchair || '', internet_access: tags['internet_access'] || '',
-            outdoor_seating: tags['outdoor_seating'] || '', delivery: tags.delivery || '',
-            takeaway: tags.takeaway || '', air_conditioning: tags['air_conditioning'] || '',
-            smoking: tags.smoking || '', start_date: tags['start_date'] || '',
-          });
-        }
-        state.restaurants = restaurants.map(r => ({ ...r, distance: haversine(loc.lat, loc.lng, r.lat, r.lng), timeToTable: estimateTime(r) }));
-        Store.setRestaurantsCache({ locId: loc.id, restaurants, count: restaurants.length });
-        updateLocationDisplay(); if (state.mapView === 'map' && state.map) renderMapMarkers();
       } catch (e) {
-        console.error('Failed to fetch restaurants:', e);
+        console.log('[LunchGo] Pre-processed JSON not available:', e.message);
+      }
+
+      // Strategy 2: If no pre-processed data, try Overpass API
+      if (restaurants.length === 0) {
+        console.log('[LunchGo] Falling back to Overpass API...');
+        try {
+          const query = '[out:json][timeout:25];(nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="restaurant"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="fast_food"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="cafe"];nwr(around:' + radius + ',' + loc.lat + ',' + loc.lng + ')["amenity"="food_court"];);out center qt;';
+          const endpoints = ['https://overpass-api.de/api/interpreter', 'https://overpass.openstreetmap.fr/api/interpreter'];
+          let resp = null;
+          for (const ep of endpoints) {
+            try {
+              resp = await fetch(ep, {
+                method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'data=' + encodeURIComponent(query),
+              });
+              if (resp.ok) break;
+            } catch (_) { resp = null; }
+          }
+          if (!resp || !resp.ok) throw new Error('All Overpass endpoints failed');
+          const data = await resp.json();
+          for (const elem of (data.elements || [])) {
+            const tags = elem.tags || {}; const name = tags['name:zh'] || tags.name; if (!name) continue;
+            restaurants.push({
+              id: 'osm_' + elem.id + (elem.type === 'way' ? 'w' : elem.type === 'relation' ? 'r' : ''),
+              name: name, name_en: tags['name:en'] || '',
+              name_tc: tags['name:zh'] || tags['name:zh-Hant'] || '',
+              lat: elem.lat || (elem.center && elem.center.lat) || 0,
+              lng: elem.lon || (elem.center && elem.center.lon) || 0,
+              cuisine: tags.cuisine || '', phone: tags.phone || tags['contact:phone'] || '',
+              website: tags.website || tags['contact:website'] || '',
+              address: tags['addr:full'] || tags['addr:street'] || '',
+              opening_hours: tags.opening_hours || '', amenity: tags.amenity || 'restaurant',
+              operator: tags.operator || '', brand: tags.brand || '',
+              district: '', district_tc: '',
+              source: 'overpass_live',
+            });
+          }
+          dataSource = 'overpass-live';
+          console.log('[LunchGo] Loaded from Overpass:', restaurants.length);
+        } catch (e) {
+          console.error('[LunchGo] Overpass also failed:', e);
+        }
+      }
+
+      // Handle total failure
+      if (restaurants.length === 0) {
         if (cache) {
-          state.restaurants = cache.restaurants.map(r => ({ ...r, distance: haversine(loc.lat, loc.lng, r.lat, r.lng), timeToTable: estimateTime(r) }));
-          document.getElementById('list-container').innerHTML = '<div class="empty" style="color:#e67e22;">網路連線不佳，顯示離線資料</div>' + document.getElementById('list-container').innerHTML;
+          state.restaurants = filterByRadius(cache.restaurants, loc, radius).map(r => ({ ...r, distance: haversine(loc.lat, loc.lng, r.lat, r.lng), timeToTable: estimateTime(r) }));
+          document.getElementById('list-container').innerHTML = '<div class="empty" style="color:#e67e22;">網路連線不佳，顯示離線資料</div>';
         } else {
           state.restaurants = [];
           document.getElementById('list-container').innerHTML = '<div class="empty">無法取得餐廳資料，請稍後再試</div>';
         }
+        state.loading = false; updateLocationDisplay(); return;
       }
+
+      // Filter by radius and process
+      state.restaurants = filterByRadius(restaurants, loc, radius).map(r => ({ ...r, distance: haversine(loc.lat, loc.lng, r.lat, r.lng), timeToTable: estimateTime(r) }));
+      Store.setRestaurantsCache({ locId: loc.id, restaurants: state.restaurants, count: state.restaurants.length, source: dataSource });
+      updateLocationDisplay(); renderList(); if (state.mapView === 'map' && state.map) renderMapMarkers();
       state.loading = false;
+    }
+
+    function filterByRadius(restaurants, loc, radius) {
+      return restaurants.filter(r => {
+        if (!r.lat || !r.lng) return false;
+        return haversine(loc.lat, loc.lng, r.lat, r.lng) <= radius;
+      });
     }
 
     function estimateTime(r) {
@@ -764,7 +814,7 @@
       if (pick.amenity === 'fast_food') reasons.push('出餐快');
       if (reasons.length === 0) reasons.push('值得一試');
       state.recommendation = pick;
-      document.getElementById('rec-name').textContent = pick.name;
+      document.getElementById('rec-name').textContent = restName(pick);
       document.getElementById('rec-cuisine').textContent = cuisineDisplay(pick.cuisine);
       document.getElementById('rec-distance').textContent = formatDist(pick.distance);
       document.getElementById('rec-time').textContent = pick.timeToTable + '分鐘';
@@ -803,12 +853,25 @@
     function goToDetail() { const r = state.recommendation; if (!r) return; showDetail(r); }
     function showDetail(r) {
       state.currentRest = r;
-      document.getElementById('detail-name').textContent = r.name;
+      document.getElementById('detail-name').textContent = restName(r);
       document.getElementById('detail-info').innerHTML = cuisineDisplay(r.cuisine) + ' · ' + formatDist(r.distance) + ' · 約' + r.timeToTable + '分鐘';
-      document.getElementById('detail-address').textContent = r.address || '地址未提供';
+      document.getElementById('detail-address').textContent = r.address_tc || r.address || '地址未提供';
       document.getElementById('detail-hours').textContent = r.opening_hours ? r.opening_hours : '營業時間未提供';
       document.getElementById('detail-contact').textContent = r.phone ? r.phone : '電話未提供';
       document.getElementById('detail-maps').href = 'https://maps.google.com/?q=' + r.lat + ',' + r.lng;
+      // Show district badge if available
+      const distBadge = document.getElementById('detail-district');
+      if (distBadge) {
+        const dc = r.district_tc || r.district;
+        distBadge.textContent = dc ? dc : '';
+        distBadge.style.display = dc ? 'inline-block' : 'none';
+      }
+      // Show licence type if available
+      const licBadge = document.getElementById('detail-licence');
+      if (licBadge) {
+        licBadge.textContent = r.licence_type || '';
+        licBadge.style.display = r.licence_type ? 'inline-block' : 'none';
+      }
       nav('detail');
     }
 
@@ -834,7 +897,7 @@
         if (r.phone) featureTags.push('<span class="tag">電話</span>');
         if (r.wifi === 'yes') featureTags.push('<span class="tag">WiFi</span>');
         return '<div class="card list-card" onclick="showDetail(' + JSON.stringify(r).replace(/'/g, "\\'") + ')">' +
-          '<div class="list-header"><span class="list-name">' + r.name + (r.name_en ? ' <small>' + r.name_en + '</small>' : '') + '</span>' +
+          '<div class="list-header"><span class="list-name">' + restName(r) + (restNameSub(r) ? ' <small>' + restNameSub(r) + '</small>' : '') + '</span>' +
           '<span class="heart-icon ' + (isFav ? 'active' : '') + '" onclick="event.stopPropagation();quickFav(' + JSON.stringify(r).replace(/'/g, "\\'") + ')">♥</span></div>' +
           '<div class="list-meta">' + cuisineDisplay(r.cuisine) + ' · ' + formatDist(r.distance) + ' · 約' + r.timeToTable + '分鐘</div>' +
           '<div class="list-tags">' + amenityTag + featureTags.join('') + '</div></div>';
@@ -854,7 +917,7 @@
       container.innerHTML = favs.map(f => {
         const loc = state.currentLocation; const dist = loc ? formatDist(haversine(loc.lat, loc.lng, f.lat || 0, f.lng || 0)) : '';
         return '<div class="card list-card" onclick="showDetail(' + JSON.stringify(f).replace(/'/g, "\\'") + ')">' +
-          '<div class="list-header"><span class="list-name">' + f.name + '</span>' +
+          '<div class="list-header"><span class="list-name">' + (f.name_tc || f.name || '未知') + '</span>' +
           '<span class="heart-icon active" onclick="event.stopPropagation();removeFav(\'' + f.id + '\')">♥</span></div>' +
           '<div class="list-meta">' + cuisineDisplay(f.cuisine) + (dist ? ' · ' + dist : '') + '</div></div>';
       }).join('');

@@ -1,0 +1,46 @@
+name: Update Restaurant Data
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC (10 AM HKT)
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch and merge restaurant data
+        run: python scripts/update_restaurants.py
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git diff --stat data/hk_restaurants.json || echo "No changes detected"
+          if git diff --quiet data/hk_restaurants.json; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config user.name "LunchGo Bot"
+          git config user.email "bot@lunchgo.app"
+          git add data/hk_restaurants.json
+          git diff --staged --stat
+          git commit -m "data: update HK restaurant data $(date +%Y-%m-%d)"
+          git push
