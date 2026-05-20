@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>午膳快 LunchGo</title>
+  <style>
+    :root {
+      --brand-green: #07C160;
+      --brand-dark: #06ad56;
+      --status-green: #07C160;
+      --status-yellow: #FFC107;
+      --status-orange: #FF9800;
+      --status-red: #F44336;
+      --bg: #f5f5f5;
+      --card: #ffffff;
+      --text-primary: #333333;
+      --text-secondary: #666666;
+      --text-muted: #999999;
+      --border: #e5e5e5;
+      --radius: 16px;
+      --shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      padding-bottom: 60px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-title { font-size: 20px; font-weight: 600; }
+    .menu-btn { padding: 8px; cursor: pointer; }
+    .menu-btn::before { content: "\2630"; font-size: 20px; color: var(--text-secondary); }
+
+    /* Container */
+    .container { padding: 0 16px 20px; }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    /* Time Budget */
+    .budget-section { padding: 16px; }
+    .budget-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .budget-label { font-size: 15px; font-weight: 500; }
+    .budget-value { font-size: 18px; font-weight: 600; color: var(--brand-green); }
+    .budget-slider { width: 100%; margin: 8px 0; accent-color: var(--brand-green); }
+    .mode-toggle { display: flex; gap: 8px; margin-top: 12px; }
+    .mode-btn {
+      flex: 1; text-align: center; padding: 8px; border-radius: 6px;
+      background: #f0f0f0; color: var(--text-secondary); font-size: 12px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .mode-btn.active { background: var(--brand-green); color: #fff; }
+
+    /* Cuisine Chips */
+    .cuisine-scroll { overflow-x: auto; white-space: nowrap; margin: 12px 0; -webkit-overflow-scrolling: touch; }
+    .cuisine-scroll::-webkit-scrollbar { display: none; }
+    .cuisine-chips { display: inline-flex; gap: 8px; padding: 4px 0; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 8px 14px; border-radius: 20px; background: #fff;
+      border: 1.5px solid var(--border); font-size: 13px; color: var(--text-secondary);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .chip.active { background: var(--brand-green); color: #fff; border-color: var(--brand-green); }
+
+    /* Quick Pick */
+    .qp-section { margin: 12px 0; }
+    .qp-card {
+      background: linear-gradient(135deg, var(--brand-green) 0%, var(--brand-dark) 100%);
+      color: #fff; padding: 24px 20px; border-radius: 20px; cursor: pointer;
+    }
+    .qp-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .qp-icon { font-size: 22px; }
+    .qp-title { font-size: 20px; font-weight: 600; }
+    .qp-sub { font-size: 13px; opacity: 0.9; margin-left: 30px; }
+    .qp-modes { display: flex; gap: 10px; margin-top: 14px; justify-content: center; }
+    .qp-mode {
+      flex: 1; text-align: center; padding: 10px; border-radius: 8px;
+      background: #fff; border: 1.5px solid var(--border);
+      color: var(--text-secondary); font-size: 13px; cursor: pointer;
+    }
+    .qp-mode.active { border-color: var(--brand-green); color: var(--brand-green); background: #f0fff5; }
+
+    /* Recommendation */
+    .rec-section { margin: 12px 0; }
+    .rec-card { padding: 20px; border-left: 4px solid var(--brand-green); }
+    .rec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .rec-name { font-size: 17px; font-weight: 600; }
+    .heart-icon { font-size: 20px; cursor: pointer; color: #ccc; }
+    .heart-icon.active { color: var(--brand-green); }
+    .rec-details { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+    .rec-dot { font-size: 10px; }
+    .rec-time { color: var(--brand-green); font-weight: 500; }
+    .rec-reason { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+    .rec-actions { display: flex; gap: 10px; }
+    .action-btn {
+      flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; text-align: center;
+      border: none; cursor: pointer;
+    }
+    .btn-accept { background: var(--brand-green); color: #fff; }
+    .btn-refresh { background: #f0f0f0; color: var(--text-secondary); }
+    .btn-detail { background: #e8f5e9; color: var(--brand-green); }
+
+    /* Favorites Card */
+    .fav-card { padding: 14px 16px; cursor: pointer; }
+    .fav-header { display: flex; justify-content: space-between; align-items: center; }
+    .fav-title { font-size: 14px; font-weight: 500; }
+    .fav-arrow { font-size: 12px; color: var(--text-muted); }
+    .fav-preview { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .fav-item {
+      font-size: 12px; color: var(--text-secondary); background: #f0f0f0;
+      padding: 4px 10px; border-radius: 6px;
+    }
+
+    /* Browse Button */
+    .btn-primary {
+      width: 100%; padding: 14px; background: var(--brand-green); color: #fff;
+      border: none; border-radius: 10px; font-size: 15px; font-weight: 500;
+      cursor: pointer; margin: 12px 0;
+    }
+    .btn-primary:active { background: var(--brand-dark); }
+
+    /* Deals Banner */
+    .deal-banner { padding: 14px 16px; background: #fff8e1; border-left: 4px solid var(--status-yellow); cursor: pointer; }
+    .deal-header { display: flex; justify-content: space-between; align-items: center; }
+    .deal-text { font-size: 14px; font-weight: 500; }
+    .deal-name { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+    .deal-desc { font-size: 12px; color: var(--status-orange); font-weight: 500; }
+
+    /* Page Navigation */
+    .page { display: none; }
+    .page.active { display: block; }
+    .nav-back {
+      display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+      cursor: pointer; font-size: 14px; color: var(--text-secondary);
+    }
+    .nav-back::before { content: "\2190"; font-size: 18px; }
+
+    /* List View */
+    .list-card { padding: 14px 16px; cursor: pointer; }
+    .list-header { display: flex; justify-content: space-between; align-items: center; }
+    .list-name { font-size: 15px; font-weight: 500; }
+    .list-meta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+    /* Settings */
+    .setting-label { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip-excluded { background: var(--status-red) !important; color: #fff !important; border-color: var(--status-red) !important; }
+    .price-options { display: flex; gap: 10px; }
+    .price-btn {
+      flex: 1; text-align: center; padding: 10px; border-radius: 8px;
+      background: #f0f0f0; font-size: 13px; cursor: pointer;
+    }
+    .price-btn.active { background: var(--brand-green); color: #fff; }
+
+    /* Toast */
+    .toast {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.75); color: #fff; padding: 12px 20px;
+      border-radius: 8px; font-size: 14px; z-index: 1000; opacity: 0;
+      transition: opacity 0.2s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+
+    /* Empty State */
+    .empty { text-align: center; padding: 60px 0; color: var(--text-muted); }
+    .empty-hint { font-size: 12px; margin-top: 8px; }
+
+    /* Tab Bar */
+    .tab-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      display: flex; background: #fff; border-top: 1px solid var(--border);
+      z-index: 200; padding-bottom: env(safe-area-inset-bottom);
+    }
+    .tab {
+      flex: 1; text-align: center; padding: 8px 0; font-size: 10px;
+      color: var(--text-muted); cursor: pointer;
+    }
+    .tab.active { color: var(--brand-green); }
+    .tab-icon { font-size: 20px; display: block; margin-bottom: 2px; }
+  </style>
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+
+  <!-- S1: Home -->
+  <div id="page-home" class="page active">
+    <div class="header">
+      <span class="header-title">午膳快</span>
+      <span class="menu-btn" onclick="nav('settings')"></span>
+    </div>
+    <div class="container">
+      <div class="card budget-section">
+        <div class="budget-row">
+          <span class="budget-label">时间预算</span>
+          <span class="budget-value" id="budget-display">30 分钟</span>
+        </div>
+        <input type="range" class="budget-slider" id="budget-slider" min="15" max="60" step="15" value="30">
+        <div class="mode-toggle" id="mode-toggle">
+          <span class="mode-btn active" data-mode="strict">严格</span>
+          <span class="mode-btn" data-mode="relaxed">宽松</span>
+          <span class="mode-btn" data-mode="queue">队列优先</span>
+        </div>
+      </div>
+
+      <div class="cuisine-scroll">
+        <div class="cuisine-chips" id="cuisine-chips"></div>
+      </div>
+
+      <div class="qp-section">
+        <div class="qp-card" onclick="doQuickPick()">
+          <div class="qp-header"><span class="qp-icon">&#127919;</span><span class="qp-title">帮我决定</span></div>
+          <div class="qp-sub">根据你的口味推荐</div>
+        </div>
+        <div class="qp-modes" id="qp-modes">
+          <span class="qp-mode active" data-mode="smart_mix">智能</span>
+          <span class="qp-mode" data-mode="favorites_only">收藏</span>
+          <span class="qp-mode" data-mode="try_new">尝新</span>
+        </div>
+      </div>
+
+      <div class="rec-section" id="rec-section" style="display:none;">
+        <div class="card rec-card">
+          <div class="rec-header">
+            <span class="rec-name" id="rec-name"></span>
+            <span class="heart-icon" id="rec-heart" onclick="toggleFav()">&#9829;</span>
+          </div>
+          <div class="rec-details">
+            <span id="rec-cuisine"></span>
+            <span class="rec-dot" id="rec-dot">&#9679;</span>
+            <span id="rec-queue-text"></span>
+            <span class="rec-time" id="rec-time"></span>
+          </div>
+          <div class="rec-reason" id="rec-reason"></div>
+          <div class="rec-actions">
+            <button class="action-btn btn-accept" onclick="acceptPick()">就这家</button>
+            <button class="action-btn btn-refresh" onclick="doQuickPick()">&#8635; 换一个</button>
+            <button class="action-btn btn-detail" onclick="nav('detail')">详情</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card fav-card" id="fav-card" style="display:none;" onclick="nav('favorites')">
+        <div class="fav-header">
+          <span class="fav-title" id="fav-title">我的收藏</span>
+          <span class="fav-arrow">&#10148;</span>
+        </div>
+        <div class="fav-preview" id="fav-preview"></div>
+      </div>
+
+      <button class="btn-primary" onclick="nav('list')">浏览全部餐厅</button>
+
+      <div class="card deal-banner" id="deal-banner" style="display:none;">
+        <div class="deal-header">
+          <span class="deal-text">&#127875; 今日优惠</span>
+          <span class="fav-arrow">&#10148;</span>
+        </div>
+        <div class="deal-name" id="deal-name"></div>
+        <div class="deal-desc" id="deal-desc"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3: List -->
+  <div id="page-list" class="page">
+    <div class="nav-back" onclick="nav('home')">返回</div>
+    <div class="container">
+      <div id="list-container"></div>
+      <div class="empty" id="list-empty" style="display:none;">
+        <div>附近没有符合条件的餐厅</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S2: Detail -->
+  <div id="page-detail" class="page">
+    <div class="nav-back" onclick="nav('home')">返回</div>
+    <div class="container">
+      <div class="card">
+        <div class="rec-name" id="detail-name"></div>
+        <div class="rec-details" id="detail-info"></div>
+        <div class="list-meta" id="detail-address"></div>
+      </div>
+      <div class="rec-actions">
+        <button class="action-btn btn-accept">预点餐</button>
+        <button class="action-btn btn-refresh">远程取筹</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- S7: Settings -->
+  <div id="page-settings" class="page">
+    <div class="nav-back" onclick="nav('home')">返回</div>
+    <div class="container">
+      <div class="card">
+        <div class="setting-label">常用菜系</div>
+        <div class="chips" id="settings-fav-cuisines"></div>
+      </div>
+      <div class="card">
+        <div class="setting-label">排除菜系 (最多3个)</div>
+        <div class="chips" id="settings-excl-cuisines"></div>
+      </div>
+      <div class="card">
+        <div class="setting-label">价格偏好</div>
+        <div class="price-options" id="price-options"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S9: Favorites -->
+  <div id="page-favorites" class="page">
+    <div class="nav-back" onclick="nav('home')">返回</div>
+    <div class="container">
+      <div class="mode-toggle" style="margin-bottom:12px;">
+        <span class="mode-btn active" data-sort="recent" onclick="sortFav(this)">最近添加</span>
+        <span class="mode-btn" data-sort="name" onclick="sortFav(this)">名称</span>
+      </div>
+      <div id="fav-list"></div>
+      <div class="empty" id="fav-empty" style="display:none;">
+        <div>还没有收藏的餐厅</div>
+        <div class="empty-hint">在餐厅列表或推荐中点击 &#9829; 添加</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <div class="tab active" onclick="nav('home')"><span class="tab-icon">&#127968;</span>首页</div>
+    <div class="tab" onclick="nav('list')"><span class="tab-icon">&#128269;</span>浏览</div>
+    <div class="tab" onclick="nav('favorites')"><span class="tab-icon">&#9829;</span>收藏</div>
+    <div class="tab" onclick="nav('settings')"><span class="tab-icon">&#9881;</span>设置</div>
+  </div>
+
+  <script>
+    // --- Data & Config ---
+    const CUISINES = [
+      { code: 'hk-style', label: '港式', emoji: '\u{1F375}' },
+      { code: 'chinese', label: '中式', emoji: '\u{1F962}' },
+      { code: 'japanese', label: '日式', emoji: '\u{1F363}' },
+      { code: 'korean', label: '韩式', emoji: '\u{1F958}' },
+      { code: 'sea-asian', label: '东南亚', emoji: '\u{1F372}' },
+      { code: 'western', label: '西式', emoji: '\u{1F969}' },
+      { code: 'fast-food', label: '快餐', emoji: '\u{1F354}' },
+      { code: 'light-meal', label: '轻食', emoji: '\u{1F957}' },
+      { code: 'vegetarian', label: '素食', emoji: '\u{1F96C}' }
+    ];
+
+    // Mock restaurant data
+    const MOCK_RESTAURANTS = [
+      { id: 'r1', name: '华嫂冰室', name_zh: '华嫂冰室', cuisine: 'hk-style', price_range: 'standard', rating: 4.5, lat: 22.2810, lng: 114.1580, queue_wait: 5, prep_time: 10, distance_m: 300 },
+      { id: 'r2', name: '一兰拉面', name_zh: '一兰拉面', cuisine: 'japanese', price_range: 'standard', rating: 4.2, lat: 22.2800, lng: 114.1700, queue_wait: 12, prep_time: 12, distance_m: 800 },
+      { id: 'r3', name: '大家乐', name_zh: '大家乐', cuisine: 'fast-food', price_range: 'budget', rating: 3.8, lat: 22.2820, lng: 114.1600, queue_wait: 2, prep_time: 5, distance_m: 200 },
+      { id: 'r4', name: '翠华餐厅', name_zh: '翠华餐厅', cuisine: 'hk-style', price_range: 'standard', rating: 4.0, lat: 22.2790, lng: 114.1750, queue_wait: 8, prep_time: 15, distance_m: 600 },
+      { id: 'r5', name: '韩国馆', name_zh: '韩国馆', cuisine: 'korean', price_range: 'standard', rating: 4.3, lat: 22.2830, lng: 114.1650, queue_wait: 15, prep_time: 15, distance_m: 500 },
+      { id: 'r6', name: '越栈', name_zh: '越栈', cuisine: 'sea-asian', price_range: 'budget', rating: 4.1, lat: 22.2780, lng: 114.1720, queue_wait: 3, prep_time: 10, distance_m: 400 },
+      { id: 'r7', name: 'Pizza Express', name_zh: 'Pizza Express', cuisine: 'western', price_range: 'premium', rating: 4.4, lat: 22.2850, lng: 114.1680, queue_wait: 20, prep_time: 20, distance_m: 900 },
+      { id: 'r8', name: '沙律工房', name_zh: '沙律工房', cuisine: 'light-meal', price_range: 'standard', rating: 3.9, lat: 22.2770, lng: 114.1620, queue_wait: 0, prep_time: 5, distance_m: 350 },
+      { id: 'r9', name: '蜀香阁', name_zh: '蜀香阁', cuisine: 'chinese', price_range: 'standard', rating: 4.2, lat: 22.2840, lng: 114.1550, queue_wait: 10, prep_time: 15, distance_m: 700 },
+      { id: 'r10', name: '素食缘', name_zh: '素食缘', cuisine: 'vegetarian', price_range: 'budget', rating: 4.0, lat: 22.2800, lng: 114.1800, queue_wait: 2, prep_time: 10, distance_m: 1000 },
+    ];
+
+    const MOCK_DEAL = { restaurant_name: '华嫂冰室', description: '冻奶茶 $8 (原价$15)' };
+
+    // --- Storage ---
+    const Store = {
+      get(k, def) { try { const v = localStorage.getItem('lg_' + k); return v ? JSON.parse(v) : def; } catch { return def; } },
+      set(k, v) { try { localStorage.setItem('lg_' + k, JSON.stringify(v)); } catch {} },
+      getFavorites() { return this.get('favorites', []); },
+      toggleFav(r) {
+        let favs = this.getFavorites();
+        const idx = favs.findIndex(f => f.id === r.id);
+        if (idx >= 0) favs.splice(idx, 1);
+        else favs.push({ id: r.id, name: r.name, cuisine: r.cuisine, favorited_at: Date.now(), visit_count: 0 });
+        this.set('favorites', favs);
+        return idx < 0;
+      },
+      isFav(id) { return this.getFavorites().some(f => f.id === id); },
+      getPrefs() { return this.get('prefs', { favorite_cuisines: [], excluded_cuisines: [], price_preference: ['standard'], quick_pick_mode: 'smart_mix' }); },
+      setPrefs(p) { this.set('prefs', p); },
+      getHistory() { return this.get('history', []); },
+      addHistory(id) {
+        let h = this.getHistory();
+        h.unshift({ id, timestamp: Date.now() });
+        if (h.length > 50) h.length = 50;
+        this.set('history', h);
+      },
+      getCuisineFilter() { return this.get('cuisine_filter', []); },
+      setCuisineFilter(v) { this.set('cuisine_filter', v); }
+    };
+
+    // --- State ---
+    let state = {
+      budget: 30,
+      mode: 'strict',
+      selectedCuisines: [],
+      qpMode: 'smart_mix',
+      recommendation: null,
+      currentRest: null,
+      favSort: 'recent'
+    };
+
+    // --- Nav ---
+    function nav(page) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById('page-' + page).classList.add('active');
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      const tabs = { home: 0, list: 1, favorites: 2, settings: 3 };
+      if (tabs[page] !== undefined) document.querySelectorAll('.tab')[tabs[page]].classList.add('active');
+      if (page === 'favorites') renderFavorites();
+      if (page === 'settings') renderSettings();
+      if (page === 'list') renderList();
+    }
+
+    // --- Toast ---
+    function toast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 1500);
+    }
+
+    // --- Queue Status ---
+    function queueStatus(wait) {
+      if (wait < 5) return { color: '#07C160', text: '即入' };
+      if (wait <= 15) return { color: '#FFC107', text: '可接受' };
+      if (wait <= 30) return { color: '#FF9800', text: '需更多时间' };
+      return { color: '#F44336', text: '不推荐' };
+    }
+
+    function cuisineLabel(code) {
+      const c = CUISINES.find(x => x.code === code);
+      return c ? `${c.emoji} ${c.label}` : code;
+    }
+
+    // --- Quick Pick ---
+    function doQuickPick() {
+      const prefs = Store.getPrefs();
+      const favs = Store.getFavorites();
+      const history = Store.getHistory();
+
+      let cands = MOCK_RESTAURANTS.filter(r => {
+        const ttt = r.queue_wait + r.prep_time + Math.round(r.distance_m / 80);
+        if (ttt > state.budget * 1.5) return false;
+        if (prefs.excluded_cuisines.includes(r.cuisine)) return false;
+        if (state.qpMode === 'favorites_only') return favs.some(f => f.id === r.id);
+        if (state.qpMode === 'try_new') {
+          const recent = history.slice(0, 5).map(h => h.id);
+          if (recent.includes(r.id) || favs.some(f => f.id === r.id)) return false;
+        }
+        return true;
+      });
+
+      if (cands.length === 0) cands = MOCK_RESTAURANTS.slice(0, 3);
+
+      const scored = cands.map(r => {
+        let score = 0;
+        if (favs.some(f => f.id === r.id)) score += 30;
+        if (prefs.favorite_cuisines.includes(r.cuisine)) score += 15;
+        if (prefs.price_preference.includes(r.price_range)) score += 15;
+        score += r.rating * 2;
+        score += Math.max(0, 10 - r.queue_wait);
+        score += Math.random() * 10;
+        return { ...r, score, time_to_table: r.queue_wait + r.prep_time + Math.round(r.distance_m / 80) };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      const top3 = scored.slice(0, 3);
+      const total = top3.reduce((s, r) => s + r.score, 0);
+      let rand = Math.random() * total;
+      let pick = top3[0];
+      for (const c of top3) { rand -= c.score; if (rand <= 0) { pick = c; break; } }
+
+      const reasons = [];
+      if (prefs.favorite_cuisines.includes(pick.cuisine)) reasons.push('符合你的口味');
+      if (pick.queue_wait <= 5) reasons.push('队列空闲');
+      if (pick.rating >= 4.0) reasons.push('评分优秀');
+      if (reasons.length === 0) reasons.push('距离合适');
+
+      state.recommendation = pick;
+      const qs = queueStatus(pick.queue_wait);
+
+      document.getElementById('rec-name').textContent = pick.name;
+      document.getElementById('rec-cuisine').textContent = cuisineLabel(pick.cuisine);
+      document.getElementById('rec-dot').style.color = qs.color;
+      document.getElementById('rec-queue-text').textContent = qs.text;
+      document.getElementById('rec-time').textContent = pick.time_to_table + '分钟';
+      document.getElementById('rec-reason').textContent = reasons.join('，');
+      updateHeart();
+      document.getElementById('rec-section').style.display = 'block';
+    }
+
+    function acceptPick() {
+      const r = state.recommendation;
+      if (!r) return;
+      Store.addHistory(r.id);
+      const prefs = Store.getPrefs();
+      prefs.cuisine_weights = prefs.cuisine_weights || {};
+      prefs.cuisine_weights[r.cuisine] = Math.min(1, (prefs.cuisine_weights[r.cuisine] || 0.5) + 0.1);
+      Store.setPrefs(prefs);
+      toast('已记录你的选择');
+    }
+
+    function toggleFav() {
+      const r = state.recommendation;
+      if (!r) return;
+      const added = Store.toggleFav(r);
+      updateHeart();
+      updateFavCard();
+      toast(added ? '已收藏' : '已取消收藏');
+    }
+
+    function updateHeart() {
+      const h = document.getElementById('rec-heart');
+      if (state.recommendation && Store.isFav(state.recommendation.id)) {
+        h.classList.add('active');
+      } else {
+        h.classList.remove('active');
+      }
+    }
+
+    function updateFavCard() {
+      const favs = Store.getFavorites();
+      const card = document.getElementById('fav-card');
+      if (favs.length > 0) {
+        card.style.display = 'block';
+        document.getElementById('fav-title').textContent = `我的收藏 (${favs.length})`;
+        document.getElementById('fav-preview').innerHTML = favs.slice(0, 3).map(f =>
+          `<span class="fav-item">${f.name}</span>`
+        ).join('');
+      } else {
+        card.style.display = 'none';
+      }
+    }
+
+    // --- List ---
+    function renderList() {
+      const prefs = Store.getPrefs();
+      const filtered = MOCK_RESTAURANTS.filter(r => {
+        if (state.selectedCuisines.length > 0 && !state.selectedCuisines.includes(r.cuisine)) return false;
+        if (prefs.excluded_cuisines.includes(r.cuisine)) return false;
+        return true;
+      });
+
+      const container = document.getElementById('list-container');
+      const empty = document.getElementById('list-empty');
+
+      if (filtered.length === 0) {
+        container.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+      container.innerHTML = filtered.map(r => {
+        const ttt = r.queue_wait + r.prep_time + Math.round(r.distance_m / 80);
+        const qs = queueStatus(r.queue_wait);
+        return `
+          <div class="card list-card" onclick="showDetail('${r.id}')">
+            <div class="list-header">
+              <span class="list-name">${r.name}</span>
+              <span style="color:${qs.color};font-size:10px;">&#9679;</span>
+            </div>
+            <div class="list-meta">${cuisineLabel(r.cuisine)} · ${ttt}分钟 · ${r.price_range === 'budget' ? '经济' : r.price_range === 'premium' ? '高级' : '标准'}</div>
+          </div>`;
+      }).join('');
+    }
+
+    function showDetail(id) {
+      const r = MOCK_RESTAURANTS.find(x => x.id === id);
+      if (!r) return;
+      state.currentRest = r;
+      document.getElementById('detail-name').textContent = r.name;
+      document.getElementById('detail-info').innerHTML = `${cuisineLabel(r.cuisine)} · 评分 ${r.rating}`;
+      document.getElementById('detail-address').textContent = `队列: ${r.queue_wait}分钟 · 距离: ${Math.round(r.distance_m / 100 * 100)}m`;
+      nav('detail');
+    }
+
+    // --- Favorites ---
+    function renderFavorites() {
+      let favs = Store.getFavorites();
+      if (state.favSort === 'name') favs.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+      else favs.sort((a, b) => (b.favorited_at || 0) - (a.favorited_at || 0));
+
+      const container = document.getElementById('fav-list');
+      const empty = document.getElementById('fav-empty');
+
+      if (favs.length === 0) {
+        container.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+      container.innerHTML = favs.map(f => `
+        <div class="card list-card" onclick="showDetail('${f.id}')">
+          <div class="list-header">
+            <span class="list-name">${f.name}</span>
+            <span class="heart-icon active" onclick="event.stopPropagation();removeFav('${f.id}')">&#9829;</span>
+          </div>
+          <div class="list-meta">${cuisineLabel(f.cuisine)} · 访问 ${f.visit_count || 0} 次</div>
+        </div>
+      `).join('');
+    }
+
+    function sortFav(el) {
+      document.querySelectorAll('#page-favorites .mode-btn').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      state.favSort = el.dataset.sort;
+      renderFavorites();
+    }
+
+    function removeFav(id) {
+      let favs = Store.getFavorites().filter(f => f.id !== id);
+      Store.set('favorites', favs);
+      updateFavCard();
+      renderFavorites();
+      toast('已取消收藏');
+    }
+
+    // --- Settings ---
+    function renderSettings() {
+      const prefs = Store.getPrefs();
+
+      // Fav cuisines
+      document.getElementById('settings-fav-cuisines').innerHTML = CUISINES.map(c =>
+        `<span class="chip ${prefs.favorite_cuisines.includes(c.code) ? 'active' : ''}"
+              onclick="toggleSettingCuisine('${c.code}', 'fav')">${c.emoji} ${c.label}</span>`
+      ).join('');
+
+      // Excl cuisines
+      document.getElementById('settings-excl-cuisines').innerHTML = CUISINES.map(c =>
+        `<span class="chip ${prefs.excluded_cuisines.includes(c.code) ? 'chip-excluded' : ''}"
+              onclick="toggleSettingCuisine('${c.code}', 'excl')">${c.label}</span>`
+      ).join('');
+
+      // Price
+      const prices = [
+        { key: 'budget', label: '经济' },
+        { key: 'standard', label: '标准' },
+        { key: 'premium', label: '高级' }
+      ];
+      document.getElementById('price-options').innerHTML = prices.map(p =>
+        `<span class="price-btn ${prefs.price_preference.includes(p.key) ? 'active' : ''}"
+              onclick="togglePrice('${p.key}')">${p.label}</span>`
+      ).join('');
+    }
+
+    function toggleSettingCuisine(code, type) {
+      const p = Store.getPrefs();
+      const arr = type === 'fav' ? 'favorite_cuisines' : 'excluded_cuisines';
+      const idx = p[arr].indexOf(code);
+      if (idx > -1) p[arr].splice(idx, 1);
+      else {
+        if (type === 'excl' && p[arr].length >= 3) return toast('最多排除3个');
+        p[arr].push(code);
+      }
+      Store.setPrefs(p);
+      renderSettings();
+    }
+
+    function togglePrice(key) {
+      const p = Store.getPrefs();
+      const idx = p.price_preference.indexOf(key);
+      if (idx > -1) p.price_preference.splice(idx, 1);
+      else p.price_preference.push(key);
+      Store.setPrefs(p);
+      renderSettings();
+    }
+
+    // --- Init ---
+    function init() {
+      // Budget slider
+      const slider = document.getElementById('budget-slider');
+      slider.value = Store.get('budget', 30);
+      state.budget = parseInt(slider.value);
+      document.getElementById('budget-display').textContent = state.budget + ' 分钟';
+      slider.addEventListener('input', () => {
+        state.budget = parseInt(slider.value);
+        document.getElementById('budget-display').textContent = state.budget + ' 分钟';
+        Store.set('budget', state.budget);
+      });
+
+      // Mode toggle
+      document.getElementById('mode-toggle').querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#mode-toggle .mode-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.mode = btn.dataset.mode;
+        });
+      });
+
+      // Cuisine chips
+      const savedCuisines = Store.getCuisineFilter();
+      state.selectedCuisines = savedCuisines;
+      document.getElementById('cuisine-chips').innerHTML =
+        `<span class="chip ${savedCuisines.length === 0 ? 'active' : ''}" onclick="selectCuisine('all')">全部</span>` +
+        CUISINES.map(c =>
+          `<span class="chip ${savedCuisines.includes(c.code) ? 'active' : ''}"
+                onclick="selectCuisine('${c.code}')">${c.emoji} ${c.label}</span>`
+        ).join('');
+
+      // QP modes
+      const qpMode = Store.getPrefs().quick_pick_mode || 'smart_mix';
+      state.qpMode = qpMode;
+      document.querySelectorAll('#qp-modes .qp-mode').forEach(btn => {
+        if (btn.dataset.mode === qpMode) btn.classList.add('active');
+        else btn.classList.remove('active');
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#qp-modes .qp-mode').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.qpMode = btn.dataset.mode;
+          const p = Store.getPrefs();
+          p.quick_pick_mode = btn.dataset.mode;
+          Store.setPrefs(p);
+        });
+      });
+
+      // Deal
+      if (MOCK_DEAL) {
+        document.getElementById('deal-banner').style.display = 'block';
+        document.getElementById('deal-name').textContent = MOCK_DEAL.restaurant_name;
+        document.getElementById('deal-desc').textContent = MOCK_DEAL.description;
+      }
+
+      updateFavCard();
+    }
+
+    function selectCuisine(code) {
+      if (code === 'all') {
+        state.selectedCuisines = [];
+      } else {
+        const idx = state.selectedCuisines.indexOf(code);
+        if (idx > -1) state.selectedCuisines.splice(idx, 1);
+        else {
+          if (state.selectedCuisines.length >= 2) return toast('最多选择2种菜系');
+          state.selectedCuisines.push(code);
+        }
+      }
+      Store.setCuisineFilter(state.selectedCuisines);
+      document.querySelectorAll('#cuisine-chips .chip').forEach(chip => {
+        const c = chip.dataset.cuisine || chip.textContent.trim();
+        if (code === 'all') {
+          chip.classList.toggle('active', state.selectedCuisines.length === 0);
+        } else if (c.includes(code) || chip.onclick.toString().includes(code)) {
+          chip.classList.toggle('active', state.selectedCuisines.includes(code));
+        }
+      });
+      // Re-render chips properly
+      document.getElementById('cuisine-chips').innerHTML =
+        `<span class="chip ${state.selectedCuisines.length === 0 ? 'active' : ''}" onclick="selectCuisine('all')">全部</span>` +
+        CUISINES.map(c =>
+          `<span class="chip ${state.selectedCuisines.includes(c.code) ? 'active' : ''}"
+                onclick="selectCuisine('${c.code}')">${c.emoji} ${c.label}</span>`
+        ).join('');
+    }
+
+    init();
+  </script>
+</body>
+</html>
