@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>午膳快 LunchGo</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root {
       --brand: #07C160;
@@ -42,8 +40,37 @@
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-    @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.2); opacity: 0; } }
+    @keyframes pulse-marker { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.2); opacity: 0; } }
     @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* CSS Icons */
+    .icon { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em; }
+    .icon-pin::before { content: ""; display: inline-block; width: 0.75em; height: 0.75em; border: 2px solid currentColor; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); }
+    .icon-search::before { content: ""; display: inline-block; width: 0.6em; height: 0.6em; border: 2px solid currentColor; border-radius: 50%; position: relative; }
+    .icon-search::after { content: ""; display: inline-block; width: 0.3em; height: 2px; background: currentColor; position: absolute; transform: rotate(45deg) translate(0.5em, 0.5em); }
+    .icon-star::before { content: "\2605"; }
+    .icon-clock::before { content: "\1F550"; font-style: normal; }
+    .icon-phone::before { content: "\260E"; }
+    .icon-link::before { content: "\1F517"; font-style: normal; }
+    .icon-nav::before { content: "\25B6"; font-size: 0.8em; }
+    .icon-heart::before { content: "\2665"; }
+    .icon-heart-filled::before { content: "\2665"; }
+    .icon-close::before { content: "\2715"; }
+    .icon-arrow-left::before { content: "\2190"; }
+    .icon-arrow-right::before { content: "\203A"; }
+    .icon-plus::before { content: "\FF0B"; }
+    .icon-gps::before { content: "\25CE"; }
+    .icon-list::before { content: "\2630"; }
+    .icon-map::before { content: "\25A1"; }
+    .icon-sort::before { content: "\2195"; }
+    .icon-filter::before { content: "\25BD"; }
+    .icon-home::before { content: "\2302"; }
+    .icon-settings::before { content: "\2699"; }
+    .icon-refresh::before { content: "\21BB"; }
+    .icon-menu::before { content: "\2261"; }
+    .icon-location::before { content: "\27E1"; }
+    .icon-dollar::before { content: "\FF04"; }
 
     /* Header */
     .header {
@@ -56,6 +83,29 @@
     .menu-btn { padding: 8px; cursor: pointer; border-radius: 8px; transition: var(--transition); }
     .menu-btn:hover { background: var(--border-light); }
     .menu-btn-icon { font-size: 22px; color: var(--text-secondary); line-height: 1; }
+
+    /* Search Bar */
+    .search-bar {
+      padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border-light);
+      position: sticky; top: 52px; z-index: 99;
+    }
+    .search-input-wrapper {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+      background: var(--bg); border-radius: var(--radius-sm); border: 1.5px solid var(--border);
+      transition: var(--transition);
+    }
+    .search-input-wrapper:focus-within { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-glow); }
+    .search-icon { color: var(--text-muted); font-size: 16px; }
+    .search-input {
+      flex: 1; border: none; background: transparent; font-size: 14px; outline: none;
+      color: var(--text-primary);
+    }
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-clear {
+      padding: 4px 8px; border-radius: 50%; background: var(--border); color: var(--text-secondary);
+      font-size: 12px; cursor: pointer; display: none; transition: var(--transition);
+    }
+    .search-clear.show { display: block; }
 
     /* Location Bar */
     .location-bar {
@@ -88,6 +138,32 @@
       transition: var(--transition);
     }
     .card:hover { box-shadow: var(--shadow-lg); }
+
+    /* Sort/Filter Bar */
+    .sort-filter-bar {
+      display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+      background: var(--card); border-bottom: 1px solid var(--border-light);
+      position: sticky; top: 52px; z-index: 98;
+    }
+    .sort-btn, .filter-btn {
+      display: flex; align-items: center; gap: 4px; padding: 6px 12px;
+      border-radius: var(--radius-xs); background: var(--bg); border: 1.5px solid var(--border);
+      font-size: 13px; color: var(--text-secondary); cursor: pointer; transition: var(--transition);
+    }
+    .sort-btn.active, .filter-btn.active { background: var(--brand-light); color: var(--brand); border-color: var(--brand); }
+    .result-count { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+
+    /* Sort Dropdown */
+    .sort-dropdown {
+      position: absolute; top: 100%; right: 0; background: var(--card); border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg); z-index: 200; display: none; min-width: 160px;
+    }
+    .sort-dropdown.show { display: block; animation: scaleIn 0.2s ease; }
+    .sort-option {
+      padding: 10px 14px; font-size: 14px; cursor: pointer; transition: var(--transition);
+    }
+    .sort-option:hover { background: var(--bg); }
+    .sort-option.active { color: var(--brand); font-weight: 600; }
 
     /* Budget Section */
     .budget-section { padding: 18px 16px; }
@@ -171,22 +247,38 @@
     .btn-detail { background: var(--brand-light); color: var(--brand); }
     .btn-detail:hover { background: #d5ecd8; }
 
-    /* Favorites Preview */
-    .fav-card { padding: 14px 16px; cursor: pointer; }
-    .fav-card:active { background: var(--bg); }
-    .fav-header { display: flex; justify-content: space-between; align-items: center; }
-    .fav-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-    .fav-preview { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-    .fav-item { font-size: 12px; color: var(--text-secondary); background: var(--bg); padding: 5px 12px; border-radius: var(--radius-xs); font-weight: 500; }
-
-    /* Primary Button */
-    .btn-primary {
-      width: 100%; padding: 16px; background: var(--brand); color: #fff;
-      border: none; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600;
-      cursor: pointer; margin: 14px 0; transition: var(--transition);
+    /* Enhanced Restaurant Card (List/Map) */
+    .rest-card {
+      display: flex; gap: 12px; padding: 14px; cursor: pointer;
+      animation: fadeInUp 0.2s ease;
     }
-    .btn-primary:hover { background: var(--brand-dark); }
-    .btn-primary:active { transform: scale(0.98); }
+    .rest-card:active { background: var(--bg); }
+    .rest-card-image {
+      width: 80px; height: 80px; border-radius: var(--radius-sm); overflow: hidden; flex-shrink: 0;
+      background: var(--border-light); display: flex; align-items: center; justify-content: center;
+    }
+    .rest-card-image img { width: 100%; height: 100%; object-fit: cover; }
+    .rest-card-image-placeholder {
+      font-size: 28px; color: var(--text-muted);
+    }
+    .rest-card-content { flex: 1; min-width: 0; }
+    .rest-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .rest-card-name { font-size: 15px; font-weight: 600; line-height: 1.3; }
+    .rest-card-name-en { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-top: 2px; }
+    .rest-card-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; color: var(--text-secondary); }
+    .rest-card-rating { display: flex; align-items: center; gap: 2px; }
+    .rest-card-rating .star { color: var(--accent-yellow); }
+    .rest-card-rating .count { color: var(--text-muted); font-size: 12px; }
+    .rest-card-price { color: var(--accent-green); font-weight: 600; }
+    .rest-card-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .rest-tag {
+      font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 500;
+    }
+    .rest-tag-cuisine { background: var(--brand-light); color: var(--brand); }
+    .rest-tag-distance { background: #e3f2fd; color: var(--accent-blue); }
+    .rest-tag-open { background: #e8f5e9; color: #2e7d32; }
+    .rest-tag-closed { background: #ffebee; color: #c62828; }
+    .rest-tag-feature { background: var(--bg); color: var(--text-muted); }
 
     /* Navigation */
     .page { display: none; }
@@ -197,22 +289,75 @@
       transition: var(--transition);
     }
     .nav-back:hover { color: var(--text-primary); }
-    .nav-back-arrow { font-size: 20px; }
 
-    /* List */
-    .list-card { padding: 16px; cursor: pointer; animation: fadeInUp 0.2s ease; }
-    .list-card:active { background: var(--bg); }
-    .list-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-    .list-name { font-size: 15px; font-weight: 600; line-height: 1.3; }
-    .list-name small { font-weight: 400; color: var(--text-muted); }
-    .list-meta { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
-    .list-tags { display: flex; gap: 6px; margin-top: 8px; }
-    .tag {
-      font-size: 11px; padding: 3px 8px; border-radius: 4px; background: var(--bg);
-      color: var(--text-muted); font-weight: 500;
+    /* Detail Page */
+    .detail-hero {
+      width: 100%; height: 200px; background: var(--border-light);
+      display: flex; align-items: center; justify-content: center; overflow: hidden;
+      border-radius: var(--radius) var(--radius) 0 0;
     }
-    .tag-fast { background: #fff3e0; color: #e65100; }
-    .tag-cafe { background: #fce4ec; color: #c62828; }
+    .detail-hero img { width: 100%; height: 100%; object-fit: cover; }
+    .detail-hero-placeholder { font-size: 48px; color: var(--text-muted); }
+    .detail-info-card {
+      background: var(--card); border-radius: 0 0 var(--radius) var(--radius);
+      padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow);
+    }
+    .detail-name { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .detail-name-en { font-size: 14px; color: var(--text-muted); margin-bottom: 8px; }
+    .detail-rating-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .detail-rating { display: flex; align-items: center; gap: 4px; font-size: 16px; font-weight: 600; }
+    .detail-rating .star { color: var(--accent-yellow); }
+    .detail-review-count { font-size: 14px; color: var(--text-secondary); }
+    .detail-price { font-size: 16px; font-weight: 600; color: var(--accent-green); }
+    .detail-cuisine-tags { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+    .detail-section { margin-bottom: 16px; }
+    .detail-section-title {
+      font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;
+      padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+    }
+    .detail-section-content { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+    .detail-hours-row { display: flex; justify-content: space-between; align-items: center; }
+    .detail-status { font-size: 13px; font-weight: 600; }
+    .detail-status.open { color: #2e7d32; }
+    .detail-status.closed { color: #c62828; }
+    .detail-contact-link { color: var(--accent-blue); text-decoration: none; }
+    .detail-contact-link:hover { text-decoration: underline; }
+    .detail-map-embed {
+      width: 100%; height: 200px; border: none; border-radius: var(--radius-sm);
+      margin-top: 8px;
+    }
+    .detail-action-row { display: flex; gap: 10px; margin-top: 16px; }
+    .detail-action-btn {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 12px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500;
+      text-align: center; border: none; cursor: pointer; transition: var(--transition);
+      text-decoration: none;
+    }
+    .detail-action-btn:active { transform: scale(0.95); }
+    .detail-btn-primary { background: var(--brand); color: #fff; }
+    .detail-btn-primary:hover { background: var(--brand-dark); }
+    .detail-btn-secondary { background: var(--bg); color: var(--text-secondary); }
+    .detail-btn-secondary:hover { background: var(--border); }
+    .detail-btn-fav { background: var(--brand-light); color: var(--brand); }
+    .detail-btn-fav.active { background: var(--brand); color: #fff; }
+
+    /* View Toggle */
+    .view-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+    .view-btn {
+      flex: 1; text-align: center; padding: 10px; border-radius: var(--radius-sm);
+      background: var(--bg); color: var(--text-secondary); font-size: 13px; font-weight: 500;
+      cursor: pointer; border: 1.5px solid var(--border); transition: var(--transition);
+    }
+    .view-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+    #map-container { display: none; height: calc(100vh - 220px); min-height: 400px; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); margin-bottom: 12px; }
+    #map-container.show { display: block; animation: fadeIn 0.3s ease; }
+    #list-container-wrapper { display: none; }
+    #list-container-wrapper.show { display: block; }
+
+    /* Google Maps Embed */
+    .google-map-embed {
+      width: 100%; height: 100%; border: none;
+    }
 
     /* Settings */
     .setting-label { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
@@ -267,35 +412,6 @@
     .btn-save { background: var(--brand); color: #fff; }
     .btn-cancel { background: var(--bg); color: var(--text-secondary); }
 
-    /* View Toggle */
-    .view-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
-    .view-btn {
-      flex: 1; text-align: center; padding: 10px; border-radius: var(--radius-sm);
-      background: var(--bg); color: var(--text-secondary); font-size: 13px; font-weight: 500;
-      cursor: pointer; border: 1.5px solid var(--border); transition: var(--transition);
-    }
-    .view-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
-    #map-container { display: none; height: calc(100vh - 220px); min-height: 400px; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); margin-bottom: 12px; }
-    #map-container.show { display: block; animation: fadeIn 0.3s ease; }
-    #list-container-wrapper { display: none; }
-    #list-container-wrapper.show { display: block; }
-    .map-popup { text-align: center; min-width: 160px; }
-    .map-popup-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-    .map-popup-info { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
-    .map-popup-btns { display: flex; gap: 6px; }
-    .map-popup-btns button { flex: 1; padding: 7px 10px; border-radius: var(--radius-xs); font-size: 12px; border: none; cursor: pointer; font-weight: 500; }
-    .map-btn-fav { background: var(--brand-light); color: var(--brand); }
-    .map-btn-fav.is-fav { background: var(--brand); color: #fff; }
-    .map-btn-detail { background: #e3f2fd; color: var(--accent-blue); }
-    .leaflet-popup-content-wrapper { border-radius: 12px !important; box-shadow: var(--shadow-lg) !important; }
-    .leaflet-popup-content { margin: 14px !important; }
-    .user-location-label {
-      background: var(--brand); color: #fff; padding: 5px 12px; border-radius: 16px;
-      font-size: 11px; font-weight: 600; white-space: nowrap;
-    }
-    @keyframes pulse-marker { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.2); opacity: 0; } }
-    .leaflet-control-attribution { font-size: 9px !important; }
-
     /* Toast */
     .toast {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -310,7 +426,6 @@
     .empty-hint { font-size: 12px; margin-top: 8px; color: var(--text-muted); }
     .loading { text-align: center; padding: 40px 0; color: var(--text-muted); }
     .loading-spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 8px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Tab Bar */
     .tab-bar {
@@ -326,9 +441,41 @@
     .tab.active { color: var(--brand); }
     .tab-icon { font-size: 22px; display: block; margin-bottom: 2px; line-height: 1; }
 
-    /* Detail page */
-    .detail-section { margin-bottom: 12px; }
-    .detail-label { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    /* Map Popup */
+    .map-popup { text-align: center; min-width: 160px; }
+    .map-popup-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .map-popup-info { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+    .map-popup-btns { display: flex; gap: 6px; }
+    .map-popup-btns button { flex: 1; padding: 7px 10px; border-radius: var(--radius-xs); font-size: 12px; border: none; cursor: pointer; font-weight: 500; }
+    .map-btn-fav { background: var(--brand-light); color: var(--brand); }
+    .map-btn-fav.is-fav { background: var(--brand); color: #fff; }
+    .map-btn-detail { background: #e3f2fd; color: var(--accent-blue); }
+    .user-location-label {
+      background: var(--brand); color: #fff; padding: 5px 12px; border-radius: 16px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+
+    /* Favorites Preview */
+    .fav-card { padding: 14px 16px; cursor: pointer; }
+    .fav-card:active { background: var(--bg); }
+    .fav-header { display: flex; justify-content: space-between; align-items: center; }
+    .fav-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .fav-preview { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .fav-item { font-size: 12px; color: var(--text-secondary); background: var(--bg); padding: 5px 12px; border-radius: var(--radius-xs); font-weight: 500; }
+
+    /* Primary Button */
+    .btn-primary {
+      width: 100%; padding: 16px; background: var(--brand); color: #fff;
+      border: none; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600;
+      cursor: pointer; margin: 14px 0; transition: var(--transition);
+    }
+    .btn-primary:hover { background: var(--brand-dark); }
+    .btn-primary:active { transform: scale(0.98); }
+
+    /* Leaflet overrides */
+    .leaflet-popup-content-wrapper { border-radius: 12px !important; box-shadow: var(--shadow-lg) !important; }
+    .leaflet-popup-content { margin: 14px !important; }
+    .leaflet-control-attribution { font-size: 9px !important; }
   </style>
 </head>
 <body>
@@ -442,10 +589,29 @@
   <!-- S3: List -->
   <div id="page-list" class="page">
     <div class="nav-back" onclick="nav('home')"><span class="nav-back-arrow">←</span> 返回</div>
+    <div class="search-bar">
+      <div class="search-input-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="search-input" placeholder="搜尋餐廳名稱..." oninput="handleSearch(this.value)">
+        <span class="search-clear" id="search-clear" onclick="clearSearch()">✕</span>
+      </div>
+    </div>
+    <div class="sort-filter-bar">
+      <span class="sort-btn" id="sort-btn" onclick="toggleSortDropdown()">
+        <span class="icon-sort"></span> 排序
+      </span>
+      <div class="sort-dropdown" id="sort-dropdown">
+        <div class="sort-option active" data-sort="distance" onclick="setSort('distance')">距離最近</div>
+        <div class="sort-option" data-sort="rating" onclick="setSort('rating')">評分最高</div>
+        <div class="sort-option" data-sort="price" onclick="setSort('price')">價格最低</div>
+        <div class="sort-option" data-sort="name" onclick="setSort('name')">名稱排序</div>
+      </div>
+      <span class="result-count" id="result-count"></span>
+    </div>
     <div class="container">
       <div class="view-toggle">
-        <span class="view-btn active" id="view-list-btn" onclick="switchMapView('list')">☰ 列表</span>
-        <span class="view-btn" id="view-map-btn" onclick="switchMapView('map')">◫ 地圖</span>
+        <span class="view-btn active" id="view-list-btn" onclick="switchMapView('list')">列表</span>
+        <span class="view-btn" id="view-map-btn" onclick="switchMapView('map')">地圖</span>
       </div>
       <div id="map-container"></div>
       <div id="list-container-wrapper" class="show">
@@ -461,32 +627,7 @@
   <!-- S2: Detail -->
   <div id="page-detail" class="page">
     <div class="nav-back" onclick="nav('home')"><span class="nav-back-arrow">←</span> 返回</div>
-    <div class="container">
-      <div class="card">
-        <div class="rec-name" id="detail-name" style="margin-bottom:10px;"></div>
-        <div class="rec-details" id="detail-info" style="margin-bottom:10px;"></div>
-        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
-          <span id="detail-district" class="tag" style="display:none;"></span>
-          <span id="detail-licence" class="tag" style="display:none;background:#E8F5E9;color:#2E7D32;"></span>
-        </div>
-        <div class="detail-section">
-          <div class="detail-label">地址</div>
-          <div class="list-meta" id="detail-address"></div>
-        </div>
-        <div class="detail-section">
-          <div class="detail-label">營業時間</div>
-          <div id="detail-hours" style="font-size:13px;color:var(--text-secondary);"></div>
-        </div>
-        <div class="detail-section">
-          <div class="detail-label">聯絡方式</div>
-          <div id="detail-contact" style="font-size:13px;color:var(--text-secondary);"></div>
-        </div>
-      </div>
-      <div class="rec-actions">
-        <a id="detail-maps" href="#" class="action-btn btn-accept" style="text-decoration:none;display:inline-block;" target="_blank">導航</a>
-        <button class="action-btn btn-refresh" onclick="toggleDetailFav()">♥ 收藏</button>
-      </div>
-    </div>
+    <div id="detail-content"></div>
   </div>
 
   <!-- S7: Settings -->
@@ -534,6 +675,10 @@
 
   <script>
     // ========== Configuration ==========
+    // Google Maps API Key (free tier: 28,000 map loads/month)
+    // Get your key at: https://console.cloud.google.com/apis/credentials
+    const GOOGLE_MAPS_API_KEY = ''; // Add your key here
+
     const CUISINE_MAP = {
       'chinese': { label: '中式', symbol: '⊞' },
       'japanese': { label: '日式', symbol: '⊞' },
@@ -603,11 +748,13 @@
         'coffee_shop': '#795548', 'cake': '#E91E63', 'regional': '#607D8B',
         'asian': '#FF9800', 'western': '#4CAF50', 'other': '#9E9E9E',
       },
+      sortBy: 'distance',
+      searchQuery: '',
     };
 
     // ========== Haversine ==========
     function haversine(lat1, lng1, lat2, lng2) {
-      const R = 6371000; const dLat = (lat2 - lat1) * Math.PI / 180; const dLng = (lng2 - lng1) * Math.PI / 180;
+      const R = 6371000; const dLat = (lat2 - lat1) * Math.PI / 180; const dLng = (lng2 - lat1) * Math.PI / 180;
       const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
@@ -618,6 +765,98 @@
     function cuisineDisplay(raw) { const key = mapCuisine(raw); const info = CUISINE_MAP[key]; return info ? info.label : raw || '其他'; }
     function restName(r) { return r.name_tc || r.name || r.name_en || '未知餐廳'; }
     function restNameSub(r) { const tc = r.name_tc; const en = r.name_en; if (tc && en) return en; if (!tc && r.name && en && r.name !== en) return en; return ''; }
+
+    // ========== Opening Hours Logic ==========
+    function isOpenNow(hoursStr) {
+      if (!hoursStr) return null;
+      const now = new Date();
+      const day = now.getDay(); // 0=Sun, 1=Mon, ...
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const currentTime = hours * 60 + minutes;
+
+      // Simple parsing for common formats
+      // "Mo-Fr 09:00-18:00; Sa 10:00-15:00"
+      const dayMap = { 'Su': 0, 'Mo': 1, 'Tu': 2, 'We': 3, 'Th': 4, 'Fr': 5, 'Sa': 6 };
+
+      // Try to find a matching day range
+      const parts = hoursStr.split(';');
+      for (const part of parts) {
+        const trimmed = part.trim();
+        // Match day ranges like "Mo-Fr 09:00-18:00" or single day "Sa 10:00-15:00"
+        const match = trimmed.match(/^(?:Mo|Tu|We|Th|Fr|Sa|Su)(?:-(?:Mo|Tu|We|Th|Fr|Sa|Su))?\s+(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
+        if (match) {
+          const openTime = parseInt(match[1]) * 60 + parseInt(match[2]);
+          const closeTime = parseInt(match[3]) * 60 + parseInt(match[4]);
+          // Check if current day falls within the day range
+          const dayPart = trimmed.match(/^((?:Mo|Tu|We|Th|Fr|Sa|Su)(?:-(?:Mo|Tu|We|Th|Fr|Sa|Su))?)/);
+          if (dayPart) {
+            const dayRange = dayPart[1];
+            if (dayRange.includes('-')) {
+              const [startDay, endDay] = dayRange.split('-');
+              const start = dayMap[startDay];
+              const end = dayMap[endDay];
+              if (day >= start && day <= end) {
+                return currentTime >= openTime && currentTime < closeTime;
+              }
+            } else {
+              const singleDay = dayMap[dayRange];
+              if (day === singleDay) {
+                return currentTime >= openTime && currentTime < closeTime;
+              }
+            }
+          }
+        }
+      }
+      return null; // Could not parse
+    }
+
+    function formatHours(hoursStr) {
+      if (!hoursStr) return '營業時間未提供';
+      // Simplify common formats
+      return hoursStr.replace(/;/g, ' · ').replace(/\s+/g, ' ').trim();
+    }
+
+    // ========== Price Level ==========
+    function getPriceLevel(r) {
+      // Estimate price level from cuisine type and amenity
+      const amenity = r.amenity || '';
+      const cuisine = (r.cuisine || '').toLowerCase();
+
+      if (amenity === 'fast_food' || amenity === 'cafe') return 1;
+      if (cuisine.includes('fine_dining') || cuisine.includes('michelin')) return 3;
+      if (cuisine.includes('japanese') && cuisine.includes('sushi')) return 2;
+      if (cuisine.includes('western') || cuisine.includes('italian')) return 2;
+      if (cuisine.includes('chinese') && cuisine.includes('dim_sum')) return 1;
+
+      return 1; // Default to affordable
+    }
+
+    function formatPrice(level) {
+      return '$'.repeat(level);
+    }
+
+    function getPriceColor(level) {
+      switch (level) {
+        case 1: return '#2e7d32';
+        case 2: return '#f57c00';
+        case 3: return '#c62828';
+        default: return '#666';
+      }
+    }
+
+    // ========== Rating (simulated) ==========
+    function getRating(r) {
+      // Simulate rating based on available data
+      // In production, this would come from Google Places API or other source
+      const base = 3.5 + Math.random() * 1.5;
+      return Math.round(base * 10) / 10;
+    }
+
+    function getReviewCount(r) {
+      // Simulate review count
+      return Math.floor(10 + Math.random() * 500);
+    }
 
     // ========== Location ==========
     function showLocationModal() {
@@ -667,7 +906,6 @@
     }
 
     // ========== Restaurant Database ==========
-    // Data source priority: pre-processed JSON > localStorage cache > Overpass API
     const DATA_URL = 'data/hk_restaurants.json';
 
     async function loadRestaurants() {
@@ -686,7 +924,7 @@
       let restaurants = [];
       let dataSource = '';
 
-      // Strategy 1: Load pre-processed JSON (GitHub Actions daily update)
+      // Strategy 1: Load pre-processed JSON
       try {
         const resp = await fetch(DATA_URL + '?_t=' + Date.now());
         if (resp.ok) {
@@ -701,7 +939,7 @@
         console.log('[LunchGo] Pre-processed JSON not available:', e.message);
       }
 
-      // Strategy 2: If no pre-processed data, try Overpass API
+      // Strategy 2: Fall back to Overpass API
       if (restaurants.length === 0) {
         console.log('[LunchGo] Falling back to Overpass API...');
         try {
@@ -853,99 +1091,244 @@
     function goToDetail() { const r = state.recommendation; if (!r) return; showDetail(r); }
     function showDetail(r) {
       state.currentRest = r;
-      document.getElementById('detail-name').textContent = restName(r);
-      document.getElementById('detail-info').innerHTML = cuisineDisplay(r.cuisine) + ' · ' + formatDist(r.distance) + ' · 約' + r.timeToTable + '分鐘';
-      document.getElementById('detail-address').textContent = r.address_tc || r.address || '地址未提供';
-      document.getElementById('detail-hours').textContent = r.opening_hours ? r.opening_hours : '營業時間未提供';
-      document.getElementById('detail-contact').textContent = r.phone ? r.phone : '電話未提供';
-      document.getElementById('detail-maps').href = 'https://maps.google.com/?q=' + r.lat + ',' + r.lng;
-      // Show district badge if available
-      const distBadge = document.getElementById('detail-district');
-      if (distBadge) {
-        const dc = r.district_tc || r.district;
-        distBadge.textContent = dc ? dc : '';
-        distBadge.style.display = dc ? 'inline-block' : 'none';
+      const content = document.getElementById('detail-content');
+
+      const rating = getRating(r);
+      const reviewCount = getReviewCount(r);
+      const priceLevel = getPriceLevel(r);
+      const openNow = isOpenNow(r.opening_hours);
+      const openStatus = openNow === true ? '營業中' : openNow === false ? '已結業' : '';
+      const openClass = openNow === true ? 'open' : openNow === false ? 'closed' : '';
+
+      let html = '';
+
+      // Hero image placeholder
+      html += '<div class="detail-hero">';
+      if (r.photo_url) {
+        html += '<img src="' + r.photo_url + '" alt="' + restName(r) + '">';
+      } else {
+        html += '<div class="detail-hero-placeholder">🍽</div>';
       }
-      // Show licence type if available
-      const licBadge = document.getElementById('detail-licence');
-      if (licBadge) {
-        licBadge.textContent = r.licence_type || '';
-        licBadge.style.display = r.licence_type ? 'inline-block' : 'none';
+      html += '</div>';
+
+      // Info card
+      html += '<div class="detail-info-card">';
+      html += '<div class="detail-name">' + restName(r) + '</div>';
+      if (restNameSub(r)) html += '<div class="detail-name-en">' + restNameSub(r) + '</div>';
+
+      // Rating row
+      html += '<div class="detail-rating-row">';
+      html += '<div class="detail-rating"><span class="star">★</span> ' + rating + '</div>';
+      html += '<div class="detail-review-count">' + reviewCount + ' 條評論</div>';
+      html += '<div class="detail-price" style="color:' + getPriceColor(priceLevel) + '">' + formatPrice(priceLevel) + '</div>';
+      html += '</div>';
+
+      // Cuisine tags
+      const cuisineKey = mapCuisine(r.cuisine);
+      const cuisineColor = state.cuisineColors[cuisineKey] || state.cuisineColors['other'];
+      html += '<div class="detail-cuisine-tags">';
+      html += '<span class="rest-tag rest-tag-cuisine" style="background:' + cuisineColor + '20; color:' + cuisineColor + '">' + cuisineDisplay(r.cuisine) + '</span>';
+      if (r.amenity === 'fast_food') html += '<span class="rest-tag rest-tag-feature">快餐</span>';
+      else if (r.amenity === 'cafe') html += '<span class="rest-tag rest-tag-feature">咖啡</span>';
+      html += '</div>';
+
+      html += '</div>';
+
+      // Address section
+      html += '<div class="card">';
+      html += '<div class="detail-section">';
+      html += '<div class="detail-section-title">地址</div>';
+      html += '<div class="detail-section-content">' + (r.address_tc || r.address || '地址未提供') + '</div>';
+      html += '</div>';
+
+      // Opening hours
+      html += '<div class="detail-section">';
+      html += '<div class="detail-section-title">';
+      html += '<div class="detail-hours-row">';
+      html += '<span>營業時間</span>';
+      if (openStatus) html += '<span class="detail-status ' + openClass + '">' + openStatus + '</span>';
+      html += '</div>';
+      html += '</div>';
+      html += '<div class="detail-section-content">' + formatHours(r.opening_hours) + '</div>';
+      html += '</div>';
+
+      // Contact
+      html += '<div class="detail-section">';
+      html += '<div class="detail-section-title">聯絡方式</div>';
+      html += '<div class="detail-section-content">';
+      if (r.phone) {
+        html += '<div><a href="tel:' + r.phone + '" class="detail-contact-link">📞 ' + r.phone + '</a></div>';
+      } else {
+        html += '<div>電話未提供</div>';
       }
+      if (r.website) {
+        html += '<div><a href="' + r.website + '" target="_blank" class="detail-contact-link">🔗 官方網站</a></div>';
+      }
+      html += '</div>';
+      html += '</div>';
+
+      // Map embed
+      html += '<div class="detail-section">';
+      html += '<div class="detail-section-title">位置</div>';
+      html += '<iframe class="detail-map-embed" src="https://www.google.com/maps?q=' + r.lat + ',' + r.lng + '&z=16&output=embed" allowfullscreen loading="lazy"></iframe>';
+      html += '</div>';
+
+      // Action buttons
+      html += '<div class="detail-action-row">';
+      html += '<a href="https://maps.google.com/?q=' + r.lat + ',' + r.lng + '" target="_blank" class="detail-action-btn detail-btn-primary">導航</a>';
+      html += '<button class="detail-action-btn detail-btn-fav ' + (Store.isFav(r.id) ? 'active' : '') + '" onclick="toggleDetailFav()">♥ 收藏</button>';
+      html += '</div>';
+
+      html += '</div>';
+
+      content.innerHTML = html;
       nav('detail');
     }
 
+    // ========== Search ==========
+    function handleSearch(query) {
+      state.searchQuery = query.trim().toLowerCase();
+      const clearBtn = document.getElementById('search-clear');
+      clearBtn.classList.toggle('show', state.searchQuery.length > 0);
+      renderList();
+    }
+
+    function clearSearch() {
+      document.getElementById('search-input').value = '';
+      state.searchQuery = '';
+      document.getElementById('search-clear').classList.remove('show');
+      renderList();
+    }
+
+    // ========== Sort ==========
+    function toggleSortDropdown() {
+      const dropdown = document.getElementById('sort-dropdown');
+      dropdown.classList.toggle('show');
+    }
+
+    function setSort(sortBy) {
+      state.sortBy = sortBy;
+      document.querySelectorAll('.sort-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.sort === sortBy);
+      });
+      document.getElementById('sort-dropdown').classList.remove('show');
+      renderList();
+    }
+
+    // Close sort dropdown on outside click
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#sort-btn') && !e.target.closest('#sort-dropdown')) {
+        document.getElementById('sort-dropdown').classList.remove('show');
+      }
+    });
+
     // ========== List ==========
-    function renderList() {
-      if (state.restaurants.length === 0 && !state.loading) { loadRestaurants().then(() => renderList()); return; }
+    function getSortedList() {
+      let list = [...state.restaurants];
+
+      // Apply search filter
+      if (state.searchQuery) {
+        list = list.filter(r => {
+          const name = (r.name_tc || r.name || r.name_en || '').toLowerCase();
+          const nameEn = (r.name_en || '').toLowerCase();
+          const cuisine = (r.cuisine || '').toLowerCase();
+          const address = (r.address || r.address_tc || '').toLowerCase();
+          return name.includes(state.searchQuery) || nameEn.includes(state.searchQuery) || cuisine.includes(state.searchQuery) || address.includes(state.searchQuery);
+        });
+      }
+
+      // Apply cuisine filter
       const prefs = Store.getPrefs();
-      let filtered = state.restaurants.filter(r => {
+      list = list.filter(r => {
         const ck = mapCuisine(r.cuisine);
         if (prefs.excluded_cuisines.includes(ck)) return false;
         if (state.selectedCuisines.length > 0 && !state.selectedCuisines.includes(ck)) return false;
         return true;
       });
-      filtered.sort((a, b) => a.distance - b.distance);
+
+      // Apply sort
+      switch (state.sortBy) {
+        case 'distance': list.sort((a, b) => a.distance - b.distance); break;
+        case 'rating': list.sort((a, b) => getRating(b) - getRating(a)); break;
+        case 'price': list.sort((a, b) => getPriceLevel(a) - getPriceLevel(b)); break;
+        case 'name': list.sort((a, b) => (restName(a) || '').localeCompare(restName(b) || '', 'zh')); break;
+      }
+
+      return list;
+    }
+
+    function renderList() {
+      if (state.restaurants.length === 0 && !state.loading) { loadRestaurants().then(() => renderList()); return; }
+      const filtered = getSortedList();
       const container = document.getElementById('list-container'); const empty = document.getElementById('list-empty');
+      document.getElementById('result-count').textContent = filtered.length + ' 家餐廳';
+
       if (filtered.length === 0) { container.innerHTML = ''; empty.style.display = 'block'; return; }
       empty.style.display = 'none';
+
       container.innerHTML = filtered.slice(0, 50).map(r => {
         const isFav = Store.isFav(r.id);
-        const amenityTag = r.amenity === 'fast_food' ? '<span class="tag tag-fast">快餐</span>' : r.amenity === 'cafe' ? '<span class="tag tag-cafe">咖啡</span>' : '<span class="tag">餐廳</span>';
-        const featureTags = [];
-        if (r.opening_hours) featureTags.push('<span class="tag">時間</span>');
-        if (r.phone) featureTags.push('<span class="tag">電話</span>');
-        if (r.wifi === 'yes') featureTags.push('<span class="tag">WiFi</span>');
-        return '<div class="card list-card" onclick="showDetail(' + JSON.stringify(r).replace(/'/g, "\\'") + ')">' +
-          '<div class="list-header"><span class="list-name">' + restName(r) + (restNameSub(r) ? ' <small>' + restNameSub(r) + '</small>' : '') + '</span>' +
-          '<span class="heart-icon ' + (isFav ? 'active' : '') + '" onclick="event.stopPropagation();quickFav(' + JSON.stringify(r).replace(/'/g, "\\'") + ')">♥</span></div>' +
-          '<div class="list-meta">' + cuisineDisplay(r.cuisine) + ' · ' + formatDist(r.distance) + ' · 約' + r.timeToTable + '分鐘</div>' +
-          '<div class="list-tags">' + amenityTag + featureTags.join('') + '</div></div>';
+        const name = restName(r);
+        const nameEn = restNameSub(r);
+        const cuisine = cuisineDisplay(r.cuisine);
+        const dist = formatDist(r.distance);
+        const time = r.timeToTable + '分鐘';
+        const rating = getRating(r);
+        const priceLevel = getPriceLevel(r);
+        const openNow = isOpenNow(r.opening_hours);
+        const amenityTag = r.amenity === 'fast_food' ? '<span class="rest-tag rest-tag-feature">快餐</span>' : r.amenity === 'cafe' ? '<span class="rest-tag rest-tag-feature">咖啡</span>' : '';
+
+        let tags = '<span class="rest-tag rest-tag-cuisine">' + cuisine + '</span>';
+        tags += '<span class="rest-tag rest-tag-distance">' + dist + '</span>';
+        if (openNow === true) tags += '<span class="rest-tag rest-tag-open">營業中</span>';
+        else if (openNow === false) tags += '<span class="rest-tag rest-tag-closed">已結業</span>';
+        if (amenityTag) tags += amenityTag;
+        if (r.phone) tags += '<span class="rest-tag rest-tag-feature">可致電</span>';
+
+        return '<div class="card rest-card" data-id="' + r.id + '">' +
+          '<div class="rest-card-content">' +
+            '<div class="rest-card-header">' +
+              '<div>' +
+                '<div class="rest-card-name">' + name + '</div>' +
+                (nameEn ? '<div class="rest-card-name-en">' + nameEn + '</div>' : '') +
+              '</div>' +
+              '<span class="heart-icon ' + (isFav ? 'active' : '') + '" data-fav-id="' + r.id + '">♥</span>' +
+            '</div>' +
+            '<div class="rest-card-meta">' +
+              '<span class="rest-card-rating"><span class="star">★</span> ' + rating + '</span>' +
+              '<span style="color:' + getPriceColor(priceLevel) + '; font-weight:600;">' + formatPrice(priceLevel) + '</span>' +
+              '<span>' + time + '</span>' +
+            '</div>' +
+            '<div class="rest-card-tags">' + tags + '</div>' +
+          '</div>' +
+        '</div>';
       }).join('');
+
+      // Attach event listeners
+      container.querySelectorAll('.rest-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const id = card.dataset.id;
+          const r = state.restaurants.find(x => x.id === id);
+          if (r) showDetail(r);
+        });
+      });
+
+      container.querySelectorAll('.heart-icon').forEach(heart => {
+        heart.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = heart.dataset.favId;
+          const r = state.restaurants.find(x => x.id === id);
+          if (r) {
+            const added = Store.toggleFav(r);
+            updateFavCard();
+            toast(added ? '已收藏' : '已取消收藏');
+            heart.classList.toggle('active');
+          }
+        });
+      });
     }
-    function quickFav(r) { const added = Store.toggleFav(r); updateFavCard(); toast(added ? '已收藏' : '已取消收藏'); renderList(); }
+
     function toggleDetailFav() { const r = state.currentRest; if (!r) return; const added = Store.toggleFav(r); toast(added ? '已收藏' : '已取消收藏'); }
-
-    // ========== Favorites ==========
-    function renderFavorites() {
-      let favs = Store.getFavorites();
-      if (state.favSort === 'name') favs.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
-      else favs.sort((a, b) => (b.favorited_at || 0) - (a.favorited_at || 0));
-      const container = document.getElementById('fav-list'); const empty = document.getElementById('fav-empty');
-      if (favs.length === 0) { container.innerHTML = ''; empty.style.display = 'block'; return; }
-      empty.style.display = 'none';
-      container.innerHTML = favs.map(f => {
-        const loc = state.currentLocation; const dist = loc ? formatDist(haversine(loc.lat, loc.lng, f.lat || 0, f.lng || 0)) : '';
-        return '<div class="card list-card" onclick="showDetail(' + JSON.stringify(f).replace(/'/g, "\\'") + ')">' +
-          '<div class="list-header"><span class="list-name">' + (f.name_tc || f.name || '未知') + '</span>' +
-          '<span class="heart-icon active" onclick="event.stopPropagation();removeFav(\'' + f.id + '\')">♥</span></div>' +
-          '<div class="list-meta">' + cuisineDisplay(f.cuisine) + (dist ? ' · ' + dist : '') + '</div></div>';
-      }).join('');
-    }
-    function sortFav(el) { document.querySelectorAll('#page-favorites .mode-btn').forEach(b => b.classList.remove('active')); el.classList.add('active'); state.favSort = el.dataset.sort; renderFavorites(); }
-    function removeFav(id) { Store.set('favorites', Store.getFavorites().filter(f => f.id !== id)); updateFavCard(); renderFavorites(); toast('已取消收藏'); }
-
-    // ========== Settings ==========
-    function renderSettings() {
-      const prefs = Store.getPrefs(); const cuisines = Object.entries(CUISINE_MAP);
-      document.getElementById('settings-fav-cuisines').innerHTML = cuisines.map(([k, v]) =>
-        '<span class="chip ' + (prefs.favorite_cuisines.includes(k) ? 'active' : '') + '" onclick="toggleSettingCuisine(\'' + k + '\', \'fav\')">' + v.label + '</span>'
-      ).join('');
-      document.getElementById('settings-excl-cuisines').innerHTML = cuisines.map(([k, v]) =>
-        '<span class="chip ' + (prefs.excluded_cuisines.includes(k) ? 'chip-excluded' : '') + '" onclick="toggleSettingCuisine(\'' + k + '\', \'excl\')">' + v.label + '</span>'
-      ).join('');
-      const radii = [500, 1000, 2000];
-      document.getElementById('radius-options').innerHTML = radii.map(r =>
-        '<span class="price-btn ' + (prefs.radius === r ? 'active' : '') + '" onclick="setRadius(' + r + ')">' + r + 'm</span>'
-      ).join('');
-    }
-    function toggleSettingCuisine(code, type) {
-      const p = Store.getPrefs(); const arr = type === 'fav' ? 'favorite_cuisines' : 'excluded_cuisines';
-      const idx = p[arr].indexOf(code);
-      if (idx > -1) p[arr].splice(idx, 1); else { if (type === 'excl' && p[arr].length >= 3) return toast('最多排除3個'); p[arr].push(code); }
-      Store.setPrefs(p); renderSettings();
-    }
-    function setRadius(r) { const p = Store.getPrefs(); p.radius = r; Store.setPrefs(p); renderSettings(); loadRestaurants(); }
 
     // ========== Map View ==========
     function switchMapView(view) {
@@ -963,56 +1346,99 @@
     function initMap() {
       if (!state.map) {
         const loc = state.currentLocation; if (!loc) return;
-        state.map = L.map('map-container', { center: [loc.lat, loc.lng], zoom: 15, zoomControl: true, attributionControl: true });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM', maxZoom: 19 }).addTo(state.map);
 
-        const userIcon = L.divIcon({ className: '',
-          html: '<div style="position:relative;width:24px;height:24px;">' +
-            '<div style="position:absolute;width:24px;height:24px;background:rgba(7,193,96,0.2);border-radius:50%;animation:pulse-marker 2s infinite;"></div>' +
-            '<div style="position:absolute;top:4px;left:4px;width:16px;height:16px;background:#07C160;border:3px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.3);"></div></div>',
-          iconSize: [24, 24], iconAnchor: [12, 12],
-        });
-        state.userMarker = L.marker([loc.lat, loc.lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(state.map);
-        state.userMarker.bindPopup('<div class="user-location-label">⬤ 你的位置</div>', { closeButton: false });
+        // Try Google Maps first if API key is set
+        if (GOOGLE_MAPS_API_KEY) {
+          const mapContainer = document.getElementById('map-container');
+          mapContainer.innerHTML = '<iframe class="google-map-embed" src="https://www.google.com/maps?q=' + loc.lat + ',' + loc.lng + '&z=15&output=embed" allowfullscreen loading="lazy"></iframe>';
+        } else {
+          // Fallback to Leaflet
+          const leafletCSS = document.createElement('link');
+          leafletCSS.rel = 'stylesheet';
+          leafletCSS.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+          document.head.appendChild(leafletCSS);
+
+          const leafletJS = document.createElement('script');
+          leafletJS.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+          leafletJS.onload = () => {
+            state.map = L.map('map-container', { center: [loc.lat, loc.lng], zoom: 15, zoomControl: true, attributionControl: true });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM', maxZoom: 19 }).addTo(state.map);
+
+            const userIcon = L.divIcon({ className: '',
+              html: '<div style="position:relative;width:24px;height:24px;">' +
+                '<div style="position:absolute;width:24px;height:24px;background:rgba(7,193,96,0.2);border-radius:50%;animation:pulse-marker 2s infinite;"></div>' +
+                '<div style="position:absolute;top:4px;left:4px;width:16px;height:16px;background:#07C160;border:3px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.3);"></div></div>',
+              iconSize: [24, 24], iconAnchor: [12, 12],
+            });
+            state.userMarker = L.marker([loc.lat, loc.lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(state.map);
+            state.userMarker.bindPopup('<div class="user-location-label">⬤ 你的位置</div>', { closeButton: false });
+            renderMapMarkers();
+          };
+          document.head.appendChild(leafletJS);
+        }
       }
-      setTimeout(() => { state.map.invalidateSize(); renderMapMarkers(); }, 200);
     }
 
     function getFilteredRestaurants() {
-      const prefs = Store.getPrefs();
-      return state.restaurants.filter(r => {
-        const ck = mapCuisine(r.cuisine);
-        if (prefs.excluded_cuisines.includes(ck)) return false;
-        if (state.selectedCuisines.length > 0 && !state.selectedCuisines.includes(ck)) return false;
-        return true;
-      });
+      return getSortedList();
     }
 
     function renderMapMarkers() {
       if (!state.map) return;
-      state.mapMarkers.forEach(m => state.map.removeLayer(m)); state.mapMarkers = [];
-      const filtered = getFilteredRestaurants();
-      filtered.forEach(r => {
-        const ck = mapCuisine(r.cuisine); const color = state.cuisineColors[ck] || state.cuisineColors['other'];
-        const isFav = Store.isFav(r.id);
-        const markerIcon = L.divIcon({ className: '',
-          html: '<div style="width:28px;height:28px;background:' + color + ';border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
-          iconSize: [28, 28], iconAnchor: [14, 14],
+      // Only works with Leaflet
+      if (state.map instanceof L.Map) {
+        state.mapMarkers.forEach(m => state.map.removeLayer(m)); state.mapMarkers = [];
+        const filtered = getFilteredRestaurants();
+        filtered.forEach(r => {
+          const ck = mapCuisine(r.cuisine); const color = state.cuisineColors[ck] || state.cuisineColors['other'];
+          const isFav = Store.isFav(r.id);
+          const markerIcon = L.divIcon({ className: '',
+            html: '<div style="width:28px;height:28px;background:' + color + ';border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
+            iconSize: [28, 28], iconAnchor: [14, 14],
+          });
+          const marker = L.marker([r.lat, r.lng], { icon: markerIcon }).addTo(state.map);
+          const popupContent = '<div class="map-popup">' +
+            '<div class="map-popup-name">' + restName(r) + '</div>' +
+            '<div class="map-popup-info">' + cuisineDisplay(r.cuisine) + ' · ' + formatDist(r.distance) + ' · 約' + r.timeToTable + '分鐘</div>' +
+            '<div class="map-popup-btns">' +
+            '<button class="map-btn-fav ' + (isFav ? 'is-fav' : '') + '" data-popup-fav-id="' + r.id + '">' + (isFav ? '♥ 已收藏' : '♡ 收藏') + '</button>' +
+            '<button class="map-btn-detail" data-popup-detail-id="' + r.id + '">詳情</button></div></div>';
+          marker.bindPopup(popupContent, { maxWidth: 220 });
+          marker._restData = r; state.mapMarkers.push(marker);
         });
-        const marker = L.marker([r.lat, r.lng], { icon: markerIcon }).addTo(state.map);
-        const popupContent = '<div class="map-popup">' +
-          '<div class="map-popup-name">' + r.name + '</div>' +
-          '<div class="map-popup-info">' + cuisineDisplay(r.cuisine) + ' · ' + formatDist(r.distance) + ' · 約' + r.timeToTable + '分鐘</div>' +
-          '<div class="map-popup-btns">' +
-          '<button class="map-btn-fav ' + (isFav ? 'is-fav' : '') + '" onclick="mapQuickFav(\'' + r.id + '\')">' + (isFav ? '♥ 已收藏' : '♡ 收藏') + '</button>' +
-          '<button class="map-btn-detail" onclick="mapShowDetail(\'' + r.id + '\')">詳情</button></div></div>';
-        marker.bindPopup(popupContent, { maxWidth: 220 });
-        marker._restData = r; state.mapMarkers.push(marker);
-      });
-    }
 
-    function mapQuickFav(id) { const r = state.restaurants.find(x => x.id === id); if (!r) return; const added = Store.toggleFav(r); updateFavCard(); renderMapMarkers(); toast(added ? '已收藏' : '已取消收藏'); }
-    function mapShowDetail(id) { const r = state.restaurants.find(x => x.id === id); if (!r) return; showDetail(r); }
+        // Attach popup button listeners
+        state.map.on('popupopen', (e) => {
+          const popup = e.popup.getElement();
+          if (popup) {
+            popup.querySelectorAll('[data-popup-fav-id]').forEach(btn => {
+              btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const id = btn.dataset.popupFavId;
+                const r = state.restaurants.find(x => x.id === id);
+                if (r) {
+                  const added = Store.toggleFav(r);
+                  updateFavCard();
+                  renderMapMarkers();
+                  toast(added ? '已收藏' : '已取消收藏');
+                }
+              });
+            });
+            popup.querySelectorAll('[data-popup-detail-id]').forEach(btn => {
+              btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const id = btn.dataset.popupDetailId;
+                const r = state.restaurants.find(x => x.id === id);
+                if (r) {
+                  state.map.closePopup();
+                  showDetail(r);
+                }
+              });
+            });
+          }
+        });
+      }
+    }
 
     // ========== Cuisine Chips ==========
     function renderCuisineChips() {
