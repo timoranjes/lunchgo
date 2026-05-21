@@ -2,9 +2,10 @@
 """Fetch FEHD restaurant licence data and merge with Overpass API coordinates.
 
 Produces data/hk_restaurants.json for the LunchGo app:
-- Primary: FEHD government data (~17K licensed restaurants, bilingual)
-- Supplement: Overpass API for coordinates, cuisine, hours, phone
-- Output: JSON with lat/lng, cuisine, hours, merged bilingual names
+- Primary: Overpass API (coordinates, cuisine, hours, phone — real data)
+- Supplement: FEHD government data (~17K licensed restaurants, bilingual names, licence info)
+- Strategy: OSM-first with FEHD enrichment. Query Overpass by district bboxes,
+  then look up each OSM restaurant in FEHD by name to attach licence data.
 
 Runs daily via GitHub Actions. Can also be run locally:
   python scripts/update_restaurants.py
@@ -34,29 +35,31 @@ OVERPASS_ENDPOINTS = [
     'https://overpass.kumi.systems/api/interpreter',
 ]
 
-# Hong Kong district code -> info mapping
-DISTRICT_MAP = {
-    '11': {'en': 'Eastern', 'tc': '東區', 'center': (22.280, 114.220)},
-    '12': {'en': 'Wan Chai', 'tc': '灣仔', 'center': (22.278, 114.174)},
-    '15': {'en': 'Southern', 'tc': '南區', 'center': (22.240, 114.150)},
-    '17': {'en': 'Islands', 'tc': '離島', 'center': (22.250, 114.050)},
-    '18': {'en': 'Central/Western', 'tc': '中西區', 'center': (22.285, 114.150)},
-    '31': {'en': 'Food Truck', 'tc': '美食車', 'center': (22.290, 114.160)},
-    '51': {'en': 'Kwun Tong', 'tc': '觀塘', 'center': (22.315, 114.225)},
-    '52': {'en': 'Kowloon City', 'tc': '九龍城', 'center': (22.330, 114.190)},
-    '53': {'en': 'Wong Tai Sin', 'tc': '黃大仙', 'center': (22.335, 114.195)},
-    '61': {'en': 'Yau Tsim', 'tc': '油尖', 'center': (22.300, 114.170)},
-    '62': {'en': 'Mong Kok', 'tc': '旺角', 'center': (22.318, 114.170)},
-    '63': {'en': 'Sham Shui Po', 'tc': '深水埗', 'center': (22.333, 114.165)},
-    '91': {'en': 'Kwai Tsing', 'tc': '葵青', 'center': (22.360, 114.125)},
-    '92': {'en': 'Tsuen Wan', 'tc': '荃灣', 'center': (22.370, 114.110)},
-    '93': {'en': 'Tuen Mun', 'tc': '屯門', 'center': (22.395, 114.105)},
-    '94': {'en': 'Yuen Long', 'tc': '元朗', 'center': (22.445, 114.025)},
-    '95': {'en': 'Tai Po', 'tc': '大埔', 'center': (22.450, 114.170)},
-    '96': {'en': 'North', 'tc': '北區', 'center': (22.500, 114.130)},
-    '97': {'en': 'Sha Tin', 'tc': '沙田', 'center': (22.380, 114.195)},
-    '98': {'en': 'Sai Kung', 'tc': '西貢', 'center': (22.360, 114.260)},
-}
+# District bounding boxes for targeted Overpass queries
+# Format: (south, west, north, east) — enough overlap to catch border cases
+DISTRICT_BBOXES = [
+    # Hong Kong Island
+    ('Central/Western', '中西區', 22.275, 114.135, 22.295, 114.160),
+    ('Wan Chai', '灣仔', 22.270, 114.160, 22.285, 114.185),
+    ('Eastern', '東區', 22.270, 114.185, 22.295, 114.230),
+    ('Southern', '南區', 22.210, 114.120, 22.270, 114.190),
+    # Kowloon
+    ('Yau Tsim Mong', '油尖旺', 22.295, 114.155, 22.325, 114.180),
+    ('Kowloon City', '九龍城', 22.315, 114.175, 22.340, 114.205),
+    ('Wong Tai Sin', '黃大仙', 22.330, 114.185, 22.350, 114.215),
+    ('Sham Shui Po', '深水埗', 22.320, 114.145, 22.345, 114.175),
+    ('Kwun Tong', '觀塘', 22.300, 114.200, 22.335, 114.240),
+    # New Territories
+    ('Tsuen Wan', '荃灣', 22.355, 114.090, 22.385, 114.125),
+    ('Kwai Tsing', '葵青', 22.335, 114.110, 22.370, 114.145),
+    ('Tuen Mun', '屯門', 22.380, 114.070, 22.415, 114.110),
+    ('Yuen Long', '元朗', 22.425, 113.990, 22.475, 114.055),
+    ('Tai Po', '大埔', 22.430, 114.140, 22.475, 114.195),
+    ('North', '北區', 22.470, 114.090, 22.530, 114.160),
+    ('Sha Tin', '沙田', 22.365, 114.165, 22.410, 114.215),
+    ('Sai Kung', '西貢', 22.310, 114.220, 22.385, 114.310),
+    ('Islands', '離島', 22.200, 113.950, 22.290, 114.090),
+]
 
 LICENCE_TYPES = {
     'RL': 'General Restaurant',
@@ -76,7 +79,7 @@ ENDORSEMENT_MAP = {
     'H': 'Sushi',
 }
 
-# Cuisine keyword mapping (english keyword -> normalized slug for LunchGo)
+# Cuisine keyword mapping
 CUISINE_MAP = {
     'chinese': ['chinese', 'cantonese', 'sichuan', 'szechuan', 'hunan', 'shanghai',
                  'beijing', 'dim sum', 'hotpot', 'hot pot', 'congee', '點心', '火鍋', '粵菜'],
@@ -122,7 +125,6 @@ def fetch_fehd():
         restaurants = {}
         lps = root.find('LPS')
         if lps is None:
-            # Try direct children
             lps = root
 
         for lp in lps.findall('LP'):
@@ -160,13 +162,20 @@ def fetch_fehd():
     print(f'  English: {len(en_data)} restaurants')
     print(f'  Chinese: {len(tc_data)} restaurants')
 
-    # Merge by licence number
+    # Merge by licence number, build name index for enrichment
     merged = {}
+    name_index = defaultdict(list)  # normalized name -> [licno, ...]
+
     for licno, data in en_data.items():
         merged[licno] = data
         if licno in tc_data:
             merged[licno]['name_tc'] = tc_data[licno]['name']
             merged[licno]['address_tc'] = tc_data[licno]['address']
+
+        # Index by normalized names for lookup
+        name_index[normalize_fehd_name(data['name'])].append(licno)
+        if licno in tc_data:
+            name_index[normalize_fehd_name(tc_data[licno]['name'])].append(licno)
 
     # Add TC-only entries
     for licno, data in tc_data.items():
@@ -174,58 +183,81 @@ def fetch_fehd():
             merged[licno] = data
             merged[licno]['name_tc'] = data['name']
             merged[licno]['address_tc'] = data['address']
+            name_index[normalize_fehd_name(data['name'])].append(licno)
 
     print(f'  Total unique licences: {len(merged)}')
-    return merged
+    return merged, name_index
 
 
-# ── Overpass Data ───────────────────────────────────────────────────────────
+def normalize_fehd_name(name):
+    """Normalize FEHD name for lookup."""
+    if not name:
+        return ''
+    name = name.strip().lower()
+    # Remove common suffixes
+    for suffix in ['restaurant', 'cafe', 'coffee shop', 'company limited', 'co., ltd.',
+                   '有限公司', '餐廳', '咖啡', '茶餐廳', '小食']:
+        name = name.replace(suffix, '')
+    name = re.sub(r'[^\w\s&\-/]', '', name)
+    name = ' '.join(name.split())
+    return name
 
-def fetch_overpass_all():
-    """Fetch all HK restaurant data from Overpass in one query."""
-    print('\nFetching Overpass data (all HK)...')
 
-    query = '''[out:json][timeout:180];
-area["ISO3166-1"="HK"][admin_level=2]->.hk;
+# ── Overpass Data (District-by-District) ───────────────────────────────────
+
+def fetch_overpass_by_districts():
+    """Fetch OSM restaurant data by district bounding boxes."""
+    print('\nFetching Overpass data (district-by-district)...')
+    all_elements = []
+    
+    for name_en, name_tc, south, west, north, east in DISTRICT_BBOXES:
+        query = f'''[out:json][timeout:30];
 (
-  nwr["amenity"="restaurant"](area.hk);
-  nwr["amenity"="fast_food"](area.hk);
-  nwr["amenity"="cafe"](area.hk);
-  nwr["amenity"="food_court"](area.hk);
+  nwr["amenity"="restaurant"]({south},{west},{north},{east});
+  nwr["amenity"="fast_food"]({south},{west},{north},{east});
+  nwr["amenity"="cafe"]({south},{west},{north},{east});
 );
 out center qt;'''
 
-    for endpoint in OVERPASS_ENDPOINTS:
-        try:
-            print(f'  Trying {endpoint}...')
-            data = urllib.parse.urlencode({'data': query}).encode()
-            req = urllib.request.Request(endpoint, data=data, headers={
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'LunchGo-Bot/1.0',
-            })
-            resp = urllib.request.urlopen(req, timeout=240)
-            result = json.loads(resp.read().decode())
+        for endpoint in OVERPASS_ENDPOINTS:
+            try:
+                data = urllib.parse.urlencode({'data': query}).encode()
+                req = urllib.request.Request(endpoint, data=data, headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'LunchGo-Bot/1.0',
+                })
+                resp = urllib.request.urlopen(req, timeout=45)
+                result = json.loads(resp.read())
+                elements = result.get('elements', [])
+                
+                # Tag each element with district info
+                for elem in elements:
+                    elem['_district_en'] = name_en
+                    elem['_district_tc'] = name_tc
+                
+                all_elements.extend(elements)
+                print(f'  {name_en}: {len(elements)} elements')
+                break  # Success, move to next district
 
-            elements = result.get('elements', [])
-            print(f'  Got {len(elements)} elements from Overpass')
-            return elements
+            except Exception as e:
+                print(f'  {name_en} failed ({endpoint.split("/")[2]}): {str(e)[:80]}')
+                time.sleep(3)
+        
+        # Rate limit between districts
+        time.sleep(1)
 
-        except Exception as e:
-            print(f'  Endpoint failed: {e}')
-            time.sleep(5)
-
-    print('  All Overpass endpoints failed')
-    return []
+    print(f'  Total Overpass elements: {len(all_elements)}')
+    return all_elements
 
 
 def parse_overpass_element(elem):
     """Parse a single Overpass element into a restaurant dict."""
     tags = elem.get('tags', {})
+    # Prefer Chinese name, fall back to generic name
     name = tags.get('name:zh') or tags.get('name:zh-Hant') or tags.get('name', '')
     if not name:
         return None
 
-    # Get coordinates
     lat = elem.get('lat') or (elem.get('center', {}) or {}).get('lat')
     lng = elem.get('lon') or (elem.get('center', {}) or {}).get('lng')
     if not lat or not lng:
@@ -251,46 +283,9 @@ def parse_overpass_element(elem):
         'delivery': tags.get('delivery', ''),
         'takeaway': tags.get('takeaway', ''),
         'outdoor_seating': tags.get('outdoor_seating', ''),
+        'district_en': elem.get('_district_en', ''),
+        'district_tc': elem.get('_district_tc', ''),
     }
-
-
-# ── Name Normalization / Fuzzy Matching ────────────────────────────────────
-
-def normalize_name(name):
-    """Normalize restaurant name for fuzzy matching."""
-    if not name:
-        return ''
-    name = name.lower().strip()
-    # Remove common suffixes
-    for suffix in ['restaurant', 'cafe', 'coffee shop', 'company limited', 'co., ltd.',
-                   '有限公司', '餐廳', '咖啡', '茶餐廳', '小食', '茶餐廳']:
-        name = name.replace(suffix, '')
-    # Remove special chars
-    name = re.sub(r'[^\w\s&\-./]', '', name)
-    name = ' '.join(name.split())
-    return name
-
-
-def names_match(name1, name2):
-    """Check if two restaurant names likely refer to the same place."""
-    n1 = normalize_name(name1)
-    n2 = normalize_name(name2)
-    if not n1 or not n2:
-        return False
-    if n1 == n2:
-        return True
-    # One contains the other (min length to avoid false positives)
-    if len(n1) > 3 and n1 in n2:
-        return True
-    if len(n2) > 3 and n2 in n1:
-        return True
-    # Common words check for short names
-    words1 = set(n1.split())
-    words2 = set(n2.split())
-    common = words1 & words2
-    if len(common) >= 2:
-        return True
-    return False
 
 
 # ── Normalize cuisine ──────────────────────────────────────────────────────
@@ -304,167 +299,203 @@ def normalize_cuisine(raw):
         for kw in keywords:
             if kw in lower:
                 return slug
-    # Handle semicolon-separated cuisines: take the first
     if ';' in raw:
         return normalize_cuisine(raw.split(';')[0])
     return 'other'
 
 
-# ── Merge Logic ────────────────────────────────────────────────────────────
+# ── Merge Logic (OSM-first with FEHD enrichment) ───────────────────────────
 
-def merge_data(fehd_data, overpass_elements):
-    """Merge FEHD government data with Overpass coordinates/metadata."""
-    print('\nMerging FEHD + Overpass data...')
+def merge_data(fehd_data, fehd_name_index, overpass_elements):
+    """Merge: OSM restaurants as primary, enriched with FEHD licence data."""
+    print('\nMerging OSM + FEHD data...')
 
     # Parse Overpass elements
-    overpass_restaurants = []
+    osm_restaurants = []
     for elem in overpass_elements:
         parsed = parse_overpass_element(elem)
         if parsed:
-            overpass_restaurants.append(parsed)
+            osm_restaurants.append(parsed)
 
-    # Build spatial index for Overpass (district-based grouping)
-    overpass_by_district = defaultdict(list)
-    for r in overpass_restaurants:
-        # Assign district based on coordinates proximity
-        best_district = None
-        best_dist = float('inf')
-        for code, info in DISTRICT_MAP.items():
-            dlat = r['lat'] - info['center'][0]
-            dlng = r['lng'] - info['center'][1]
-            dist = dlat * dlat + dlng * dlng  # Squared distance (no need for sqrt)
-            if dist < best_dist:
-                best_dist = dist
-                best_district = code
-        r['_district'] = best_district
-        overpass_by_district[best_district].append(r)
+    # Deduplicate OSM by osm_id
+    seen_osm = set()
+    unique_osm = []
+    for r in osm_restaurants:
+        if r['osm_id'] not in seen_osm:
+            seen_osm.add(r['osm_id'])
+            unique_osm.append(r)
+    osm_restaurants = unique_osm
 
-    # Merge: FEHD records + Overpass metadata
+    # Build FEHD name lookup (normalized name -> list of licences)
+    # Try to match OSM names to FEHD records
+    matched_fehd_licences = set()
+    
     restaurants = []
-    matched = 0
-    unmatched = 0
+    osm_with_fehd = 0
+    osm_without_fehd = 0
 
-    for licno, fehd_r in fehd_data.items():
-        dist_code = fehd_r['district']
-        dist_info = DISTRICT_MAP.get(dist_code, {})
-        candidates = overpass_by_district.get(dist_code, [])
-
-        # Try to find a matching Overpass record by name
-        best_match = None
-        for op_r in candidates:
-            fehd_name = fehd_r.get('name_tc') or fehd_r.get('name', '')
-            if names_match(fehd_name, op_r.get('name', '')) or \
-               names_match(fehd_r.get('name', ''), op_r.get('name_en', '')):
-                best_match = op_r
-                break
-
-        # Also try matching by normalized name in nearby districts
-        if not best_match and dist_code:
-            # Search adjacent districts too
-            for dc in list(overpass_by_district.keys()):
-                for op_r in overpass_by_district[dc]:
-                    fehd_name = fehd_r.get('name_tc') or fehd_r.get('name', '')
-                    if names_match(fehd_name, op_r.get('name', '')):
-                        best_match = op_r
-                        break
-                if best_match:
+    for osm_r in osm_restaurants:
+        # Try to find FEHD match by name
+        fehd_licno = None
+        
+        # Try exact normalized match on Chinese name
+        norm_zh = normalize_fehd_name(osm_r.get('name_zh', ''))
+        if norm_zh and norm_zh in fehd_name_index:
+            # Pick first match (usually the right one)
+            for licno in fehd_name_index[norm_zh]:
+                if licno not in matched_fehd_licences:
+                    fehd_licno = licno
                     break
+        
+        # Try English name if Chinese didn't match
+        if not fehd_licno:
+            norm_en = normalize_fehd_name(osm_r.get('name_en', ''))
+            if norm_en and norm_en in fehd_name_index:
+                for licno in fehd_name_index[norm_en]:
+                    if licno not in matched_fehd_licences:
+                        fehd_licno = licno
+                        break
+        
+        # Try generic name
+        if not fehd_licno:
+            norm = normalize_fehd_name(osm_r.get('name', ''))
+            if norm and norm in fehd_name_index:
+                for licno in fehd_name_index[norm]:
+                    if licno not in matched_fehd_licences:
+                        fehd_licno = licno
+                        break
 
-        if best_match:
-            matched += 1
+        if fehd_licno:
+            matched_fehd_licences.add(fehd_licno)
+            fehd_r = fehd_data[fehd_licno]
+            osm_with_fehd += 1
+            
             restaurants.append({
-                'id': f'fehd_{licno}',
-                'name': fehd_r.get('name_tc') or fehd_r.get('name', '') or best_match['name'],
-                'name_en': fehd_r.get('name', '') or best_match.get('name_en', ''),
-                'name_tc': fehd_r.get('name_tc', ''),
-                'lat': best_match['lat'],
-                'lng': best_match['lng'],
-                'address': fehd_r.get('address_tc') or fehd_r.get('address', '') or best_match.get('address', ''),
+                'id': f"osm_{osm_r['osm_id']}",
+                'name': osm_r.get('name_zh', '') or osm_r['name'],
+                'name_en': osm_r.get('name_en', '') or fehd_r.get('name', ''),
+                'name_tc': osm_r.get('name_zh', ''),
+                'lat': osm_r['lat'],
+                'lng': osm_r['lng'],
+                'address': osm_r.get('address', '') or fehd_r.get('address_tc', fehd_r.get('address', '')),
                 'address_tc': fehd_r.get('address_tc', ''),
-                'district': dist_info.get('en', dist_code),
-                'district_tc': dist_info.get('tc', ''),
-                'cuisine': best_match.get('cuisine_raw', ''),
-                'phone': best_match.get('phone', ''),
-                'website': best_match.get('website', ''),
-                'opening_hours': best_match.get('opening_hours', ''),
-                'amenity': 'restaurant',
+                'district': osm_r.get('district_en', ''),
+                'district_tc': osm_r.get('district_tc', ''),
+                'cuisine': normalize_cuisine(osm_r.get('cuisine_raw', '')),
+                'cuisine_raw': osm_r.get('cuisine_raw', ''),
+                'phone': osm_r.get('phone', ''),
+                'website': osm_r.get('website', ''),
+                'opening_hours': osm_r.get('opening_hours', ''),
+                'amenity': osm_r.get('amenity', 'restaurant'),
                 'licence_type': LICENCE_TYPES.get(fehd_r.get('type', ''), fehd_r.get('type', '')),
                 'endorsements': fehd_r.get('endorsements', []),
                 'expiry': fehd_r.get('expdate', ''),
-                'source': 'fehd+osm',
-                'osm_id': best_match.get('osm_id'),
+                'source': 'osm+fehd',
+                'osm_id': osm_r['osm_id'],
             })
         else:
-            # FEHD-only record — no coordinates from Overpass
-            # Estimate coordinates from district center for basic map display
-            center = dist_info.get('center', (22.319, 114.169)) if dist_info else (22.319, 114.169)
-            # Add small random offset to avoid stacking on district center
-            import random
-            lat_offset = (random.random() - 0.5) * 0.01  # ~±0.5km
-            lng_offset = (random.random() - 0.5) * 0.01
-
-            unmatched += 1
+            osm_without_fehd += 1
             restaurants.append({
-                'id': f'fehd_{licno}',
-                'name': fehd_r.get('name_tc') or fehd_r.get('name', ''),
-                'name_en': fehd_r.get('name', ''),
-                'name_tc': fehd_r.get('name_tc', ''),
-                'lat': round(center[0] + lat_offset, 6),
-                'lng': round(center[1] + lng_offset, 6),
-                'address': fehd_r.get('address_tc') or fehd_r.get('address', ''),
-                'address_tc': fehd_r.get('address_tc', ''),
-                'district': dist_info.get('en', dist_code),
-                'district_tc': dist_info.get('tc', ''),
-                'cuisine': '',
-                'phone': '',
-                'website': '',
-                'opening_hours': '',
-                'amenity': 'restaurant',
-                'licence_type': LICENCE_TYPES.get(fehd_r.get('type', ''), fehd_r.get('type', '')),
-                'endorsements': fehd_r.get('endorsements', []),
-                'expiry': fehd_r.get('expdate', ''),
-                'source': 'fehd_only',
-                'osm_id': None,
-            })
-
-    # Add Overpass-only restaurants (not in FEHD — might be unlicensed or recently added)
-    fehd_ids = {f'fehd_{l}' for l in fehd_data}
-    existing_osm_ids = set()
-    for r in restaurants:
-        if r.get('osm_id'):
-            existing_osm_ids.add(r['osm_id'])
-
-    overpass_only = 0
-    for op_r in overpass_restaurants:
-        if op_r['osm_id'] not in existing_osm_ids:
-            overpass_only += 1
-            dist_info = DISTRICT_MAP.get(op_r.get('_district', ''), {})
-            restaurants.append({
-                'id': f"osm_{op_r['osm_id']}" + ('w' if op_r['osm_type'] == 'way' else 'r' if op_r['osm_type'] == 'relation' else ''),
-                'name': op_r['name'],
-                'name_en': op_r.get('name_en', ''),
-                'name_tc': op_r.get('name_zh', ''),
-                'lat': op_r['lat'],
-                'lng': op_r['lng'],
-                'address': op_r.get('address', ''),
+                'id': f"osm_{osm_r['osm_id']}",
+                'name': osm_r.get('name_zh', '') or osm_r['name'],
+                'name_en': osm_r.get('name_en', ''),
+                'name_tc': osm_r.get('name_zh', ''),
+                'lat': osm_r['lat'],
+                'lng': osm_r['lng'],
+                'address': osm_r.get('address', ''),
                 'address_tc': '',
-                'district': dist_info.get('en', ''),
-                'district_tc': dist_info.get('tc', ''),
-                'cuisine': op_r.get('cuisine_raw', ''),
-                'phone': op_r.get('phone', ''),
-                'website': op_r.get('website', ''),
-                'opening_hours': op_r.get('opening_hours', ''),
-                'amenity': op_r.get('amenity', 'restaurant'),
+                'district': osm_r.get('district_en', ''),
+                'district_tc': osm_r.get('district_tc', ''),
+                'cuisine': normalize_cuisine(osm_r.get('cuisine_raw', '')),
+                'cuisine_raw': osm_r.get('cuisine_raw', ''),
+                'phone': osm_r.get('phone', ''),
+                'website': osm_r.get('website', ''),
+                'opening_hours': osm_r.get('opening_hours', ''),
+                'amenity': osm_r.get('amenity', 'restaurant'),
                 'licence_type': '',
                 'endorsements': [],
                 'expiry': '',
                 'source': 'osm_only',
-                'osm_id': op_r.get('osm_id'),
+                'osm_id': osm_r['osm_id'],
             })
 
-    print(f'  FEHD matched with OSM: {matched}')
-    print(f'  FEHD unmatched (no OSM coords): {unmatched}')
-    print(f'  Overpass-only (not in FEHD): {overpass_only}')
+    # Add unmatched FEHD records (not found in OSM) with district center coords
+    # District center fallback coordinates
+    DISTRICT_CENTERS = {
+        'Central/Western': (22.285, 114.150),
+        'Wan Chai': (22.278, 114.174),
+        'Eastern': (22.280, 114.220),
+        'Southern': (22.240, 114.150),
+        'Islands': (22.250, 114.050),
+        'Kwun Tong': (22.315, 114.225),
+        'Kowloon City': (22.330, 114.190),
+        'Wong Tai Sin': (22.335, 114.195),
+        'Yau Tsim': (22.300, 114.170),
+        'Mong Kok': (22.318, 114.170),
+        'Sham Shui Po': (22.333, 114.165),
+        'Kwai Tsing': (22.360, 114.125),
+        'Tsuen Wan': (22.370, 114.110),
+        'Tuen Mun': (22.395, 114.105),
+        'Yuen Long': (22.445, 114.025),
+        'Tai Po': (22.450, 114.170),
+        'North': (22.500, 114.130),
+        'Sha Tin': (22.380, 114.195),
+        'Sai Kung': (22.360, 114.260),
+        'Food Truck': (22.290, 114.160),
+    }
+
+    fehd_only_count = 0
+    import random
+    for licno, fehd_r in fehd_data.items():
+        if licno in matched_fehd_licences:
+            continue
+        
+        dist_code = fehd_r.get('district', '')
+        dist_name = None
+        for code, info in DISTRICT_CENTERS.items():
+            if code.lower().replace('/', '').replace(' ', '') == dist_code.lower().replace('/', '').replace(' ', ''):
+                dist_name = code
+                break
+        
+        # If no exact match, try partial
+        if not dist_name:
+            for code in DISTRICT_CENTERS:
+                if dist_code and dist_code in code:
+                    dist_name = code
+                    break
+        
+        center = DISTRICT_CENTERS.get(dist_name or '', (22.319, 114.169))
+        lat_offset = (random.random() - 0.5) * 0.01
+        lng_offset = (random.random() - 0.5) * 0.01
+
+        fehd_only_count += 1
+        restaurants.append({
+            'id': f'fehd_{licno}',
+            'name': fehd_r.get('name_tc', '') or fehd_r.get('name', ''),
+            'name_en': fehd_r.get('name', ''),
+            'name_tc': fehd_r.get('name_tc', ''),
+            'lat': round(center[0] + lat_offset, 6),
+            'lng': round(center[1] + lng_offset, 6),
+            'address': fehd_r.get('address_tc', '') or fehd_r.get('address', ''),
+            'address_tc': fehd_r.get('address_tc', ''),
+            'district': dist_name or dist_code,
+            'district_tc': '',
+            'cuisine': '',
+            'cuisine_raw': '',
+            'phone': '',
+            'website': '',
+            'opening_hours': '',
+            'amenity': 'restaurant',
+            'licence_type': LICENCE_TYPES.get(fehd_r.get('type', ''), fehd_r.get('type', '')),
+            'endorsements': fehd_r.get('endorsements', []),
+            'expiry': fehd_r.get('expdate', ''),
+            'source': 'fehd_only',
+            'osm_id': None,
+        })
+
+    print(f'  OSM with FEHD enrichment: {osm_with_fehd}')
+    print(f'  OSM only (no FEHD match): {osm_without_fehd}')
+    print(f'  FEHD only (not in OSM): {fehd_only_count}')
     print(f'  Total restaurants: {len(restaurants)}')
 
     return restaurants
@@ -473,17 +504,17 @@ def merge_data(fehd_data, overpass_elements):
 # ── Main ────────────────────────────────────────────────────────────────────
 
 def main():
-    # Step 1: Fetch FEHD government data
-    fehd_data = fetch_fehd()
+    # Step 1: Fetch FEHD government data (for name enrichment)
+    fehd_data, fehd_name_index = fetch_fehd()
     if not fehd_data:
         print('ERROR: No FEHD data fetched. Cannot continue.')
         sys.exit(1)
 
-    # Step 2: Fetch Overpass data (coordinates + metadata)
-    overpass_elements = fetch_overpass_all()
+    # Step 2: Fetch Overpass data by district (coordinates + real metadata)
+    overpass_elements = fetch_overpass_by_districts()
 
-    # Step 3: Merge datasets
-    restaurants = merge_data(fehd_data, overpass_elements)
+    # Step 3: Merge — OSM first, enriched with FEHD where names match
+    restaurants = merge_data(fehd_data, fehd_name_index, overpass_elements)
 
     # Step 4: Write output
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
@@ -492,6 +523,9 @@ def main():
         'last_updated': time.strftime('%Y-%m-%dT%H:%M:%S+08:00'),
         'total': len(restaurants),
         'with_coordinates': sum(1 for r in restaurants if r.get('lat') and r.get('source') != 'fehd_only'),
+        'with_cuisine': sum(1 for r in restaurants if r.get('cuisine')),
+        'with_phone': sum(1 for r in restaurants if r.get('phone')),
+        'with_hours': sum(1 for r in restaurants if r.get('opening_hours')),
         'sources': {
             'fehd': 'https://www.fehd.gov.hk/english/licensing/license/text/LP_Restaurants_EN.XML',
             'overpass': 'https://overpass-api.de/api/interpreter',
