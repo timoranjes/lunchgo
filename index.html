@@ -42,13 +42,15 @@
     .header-top { display: flex; align-items: center; gap: 10px; }
     .header h1 { font-size: 18px; font-weight: 700; color: var(--brand); white-space: nowrap; }
     .header h1 span { font-weight: 400; color: var(--text-secondary); font-size: 13px; }
-    .loc-btn {
+    .loc-btn, .fav-btn {
       margin-left: auto; background: var(--bg); border: 1px solid var(--border);
       border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--text-secondary);
       cursor: pointer; display: flex; align-items: center; gap: 4px;
     }
+    .fav-btn { margin-left: 6px; }
     .loc-btn::before { content: ""; display: inline-block; width: 8px; height: 8px;
       border: 1.5px solid currentColor; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); }
+    .fav-btn::before { content: "\2665"; font-size: 12px; }
 
     /* -- Search Bar -- */
     .search-bar {
@@ -152,11 +154,33 @@
     .tag-type { background: #FFF3E0; color: #E65100; }
     .tag-price { background: #F3E5F5; color: #7B1FA2; }
     .tag-cuisine { background: #E0F7FA; color: #00695C; }
+    .tag-phone { background: #E8EAF6; color: #283593; }
+
+    /* -- Load More -- */
+    .load-more {
+      text-align: center; padding: 16px; margin-top: 8px;
+    }
+    .load-more button {
+      padding: 10px 24px; border-radius: 20px; border: 1px solid var(--brand);
+      background: var(--card); color: var(--brand); font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .load-more button:active { background: var(--brand); color: #fff; }
 
     /* -- Map -- */
     #map-view { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 900; }
     #map-view.active { display: block; }
     #map { width: 100%; height: 100%; }
+    .map-tile-toggle {
+      position: absolute; top: 10px; right: 10px; z-index: 1001;
+      background: var(--card); border-radius: 8px; box-shadow: var(--shadow-lg);
+      padding: 4px; display: flex; gap: 2px;
+    }
+    .map-tile-toggle button {
+      padding: 6px 10px; border: none; border-radius: 6px; font-size: 11px;
+      background: none; color: var(--text-secondary); cursor: pointer;
+    }
+    .map-tile-toggle button.active { background: var(--brand); color: #fff; }
     .map-info-panel {
       position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
       background: var(--card); border-radius: 16px 16px 0 0;
@@ -193,6 +217,11 @@
       border-left: 2px solid var(--text); border-bottom: 2px solid var(--text);
       transform: rotate(45deg); margin-left: 3px;
     }
+    .detail-fav {
+      margin-left: auto; width: 32px; height: 32px; border: none; background: none;
+      cursor: pointer; font-size: 18px; color: var(--text-muted);
+    }
+    .detail-fav.is-fav { color: var(--red); }
     .detail-hero { padding: 24px 16px 16px; background: var(--card); }
     .detail-name { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
     .detail-name-en { font-size: 14px; color: var(--text-muted); margin-bottom: 8px; }
@@ -252,6 +281,37 @@
       cursor: pointer; margin-top: 8px;
     }
 
+    /* -- Favorites Page -- */
+    .fav-page {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1500;
+      background: var(--bg); overflow-y: auto;
+    }
+    .fav-page.active { display: block; }
+    .fav-page-header {
+      position: sticky; top: 0; z-index: 10; background: var(--card);
+      padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .fav-page-back {
+      width: 32px; height: 32px; border: none; background: var(--bg);
+      border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .fav-page-back::before {
+      content: ""; display: block; width: 8px; height: 8px;
+      border-left: 2px solid var(--text); border-bottom: 2px solid var(--text);
+      transform: rotate(45deg); margin-left: 3px;
+    }
+    .fav-page-title { font-size: 18px; font-weight: 700; }
+    .fav-sort-bar {
+      display: flex; gap: 8px; padding: 8px 16px;
+    }
+    .fav-sort-btn {
+      padding: 5px 12px; border-radius: 16px; font-size: 12px;
+      border: 1px solid var(--border); background: var(--card);
+      color: var(--text-secondary); cursor: pointer;
+    }
+    .fav-sort-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
     /* -- Loading & Empty -- */
     .loading { text-align: center; padding: 40px 16px; color: var(--text-muted); }
     .loading-spinner {
@@ -261,6 +321,11 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .empty { text-align: center; padding: 40px 16px; color: var(--text-muted); }
+    .error-banner {
+      background: #FFF3E0; color: #E65100; padding: 8px 16px; font-size: 12px;
+      text-align: center; display: none;
+    }
+    .error-banner.show { display: block; }
 
     /* -- Toast -- */
     .toast {
@@ -400,9 +465,10 @@
 <body>
 
   <!-- Header -->
-  <div class="header">
+  <div class="header" id="main-header">
     <div class="header-top">
       <h1>LunchGo <span>搵食</span></h1>
+      <button class="fav-btn" id="fav-btn">收藏</button>
       <button class="loc-btn" id="loc-btn">選擇地點</button>
     </div>
     <div class="search-bar">
@@ -428,6 +494,9 @@
   <!-- Cuisine Filter -->
   <div class="cuisine-bar" id="cuisine-bar"></div>
 
+  <!-- Error Banner -->
+  <div class="error-banner" id="error-banner"></div>
+
   <!-- Discovery Section -->
   <div class="discovery-section" id="discovery-section" style="display:none;">
     <div class="discovery-header">
@@ -443,6 +512,9 @@
   <div class="list-container" id="list-view">
     <div class="result-count" id="result-count"></div>
     <div id="rest-list"></div>
+    <div class="load-more" id="load-more" style="display:none;">
+      <button id="load-more-btn">載入更多</button>
+    </div>
     <div class="empty" id="empty-state" style="display:none;">找不到餐廳</div>
     <div class="loading" id="loading-state">
       <div class="loading-spinner"></div>
@@ -452,6 +524,12 @@
 
   <!-- Map View -->
   <div id="map-view">
+    <div class="map-tile-toggle" id="map-tile-toggle">
+      <button class="active" data-tile="roadmap">地圖</button>
+      <button data-tile="satellite">衛星</button>
+      <button data-tile="terrain">地形</button>
+      <button data-tile="hybrid">混合</button>
+    </div>
     <div id="map"></div>
     <div class="map-info-panel" id="map-panel">
       <button class="close-btn" id="map-panel-close">+</button>
@@ -464,8 +542,26 @@
     <div class="detail-header">
       <button class="detail-back" id="detail-back"></button>
       <span style="font-weight:600;">餐廳詳情</span>
+      <button class="detail-fav" id="detail-fav">&#9825;</button>
     </div>
     <div id="detail-content"></div>
+  </div>
+
+  <!-- Favorites Page -->
+  <div class="fav-page" id="fav-page">
+    <div class="fav-page-header">
+      <button class="fav-page-back" id="fav-back"></button>
+      <span class="fav-page-title">收藏餐廳</span>
+    </div>
+    <div class="fav-sort-bar">
+      <button class="fav-sort-btn active" data-fav-sort="recent">最近添加</button>
+      <button class="fav-sort-btn" data-fav-sort="name">名稱</button>
+      <button class="fav-sort-btn" data-fav-sort="distance">距離</button>
+    </div>
+    <div class="list-container" id="fav-list-container">
+      <div id="fav-list"></div>
+      <div class="empty" id="fav-empty">未收藏任何餐廳</div>
+    </div>
   </div>
 
   <!-- Location Modal -->
@@ -505,7 +601,7 @@
   </div>
 
   <!-- View Toggle -->
-  <div class="view-toggle">
+  <div class="view-toggle" id="view-toggle">
     <button class="view-btn active" data-view="list">列表</button>
     <button class="view-btn" data-view="map">地圖</button>
   </div>
@@ -574,6 +670,11 @@
       randomPickResult: null,
       // Discovery state
       discoveryVisible: false,
+      // Load-more pagination state
+      loadMoreIndex: 0,
+      loadMoreStep: 50,
+      // Loading errors
+      loadingErrors: [],
     };
 
     // -- Storage --
@@ -602,6 +703,7 @@
     }
 
     function formatDist(m) {
+      if (m === undefined || m === null || isNaN(m)) return '';
       return m < 1000 ? Math.round(m) + 'm' : (m/1000).toFixed(1) + 'km';
     }
 
@@ -616,6 +718,14 @@
     function priceLevel(n) {
       if (!n) return '';
       return '$'.repeat(n) + ' '.repeat(Math.max(0, 4 - n));
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function escAttr(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     // Expanded cuisine matching with mixian support
@@ -689,9 +799,18 @@
         state.loadedDistricts.add(district);
       } catch (e) {
         console.error('[LunchGo] Failed to load ' + district + ':', e);
+        state.loadingErrors.push(district);
+        showLoadingError(district);
       }
 
       state.loadingDistricts.delete(district);
+    }
+
+    function showLoadingError(district) {
+      const banner = document.getElementById('error-banner');
+      banner.textContent = '載入 ' + district + ' 失敗，部分餐廳可能未顯示';
+      banner.classList.add('show');
+      setTimeout(() => banner.classList.remove('show'), 5000);
     }
 
     async function loadNearbyDistricts(loc) {
@@ -786,6 +905,8 @@
       document.getElementById('loading-state').style.display = 'block';
       document.getElementById('rest-list').innerHTML = '';
       document.getElementById('empty-state').style.display = 'none';
+      document.getElementById('load-more').style.display = 'none';
+      document.getElementById('error-banner').classList.remove('show');
 
       if (state.dataSource === 'fehd') {
         await loadNearbyDistricts(loc);
@@ -795,7 +916,9 @@
       updateDisplay();
     }
 
-    function updateDisplay() {
+    function updateDisplay(reset) {
+      if (reset === undefined) reset = true;
+
       let list = state.dataSource === 'places' ? state.placesData : state.restaurants;
 
       // Filter by search
@@ -806,7 +929,8 @@
           (r.name_en && r.name_en.toLowerCase().includes(q)) ||
           (r.address && r.address.toLowerCase().includes(q)) ||
           (r.district && r.district.toLowerCase().includes(q)) ||
-          (r.district_tc && r.district_tc.includes(q))
+          (r.district_tc && r.district_tc.includes(q)) ||
+          (r.cuisine && r.cuisine.toLowerCase().includes(q))
         );
       }
 
@@ -841,9 +965,15 @@
         const loaded = state.loadedDistricts.size;
         if (loaded < 19) countText += ' (已載入 ' + loaded + '/19 區)';
       }
+      if (state.loadingErrors.length > 0) {
+        countText += ' [載入部分失敗]';
+      }
       document.getElementById('result-count').textContent = countText;
 
       // Render
+      if (reset) {
+        state.loadMoreIndex = 0;
+      }
       renderDiscovery(list);
       renderList(list);
       if (state.map) renderMapMarkers(list);
@@ -852,6 +982,8 @@
       document.getElementById('loading-state').style.display = 'none';
       if (list.length === 0 && total > 0) {
         document.getElementById('empty-state').style.display = 'block';
+      } else {
+        document.getElementById('empty-state').style.display = 'none';
       }
     }
 
@@ -895,10 +1027,10 @@
           imgHtml = '<img src="' + r.photos[0] + '" alt="" loading="lazy" />';
         }
 
-        return '<div class="discovery-card" data-id="' + r.id + '">' +
+        return '<div class="discovery-card" data-id="' + escAttr(r.id) + '">' +
           '<div class="discovery-card-img">' + imgHtml + '</div>' +
           '<div class="discovery-card-body">' +
-            '<div class="discovery-card-name">' + (r.name || '') + '</div>' +
+            '<div class="discovery-card-name">' + escHtml(r.name || '') + '</div>' +
             '<div class="discovery-card-meta">' +
               (dist ? dist + ' · ' : '') +
               (r.price_level ? priceLevel(r.price_level) : '') +
@@ -919,12 +1051,20 @@
 
     function renderList(list) {
       const container = document.getElementById('rest-list');
+      const loadMoreEl = document.getElementById('load-more');
+      const loadMoreBtn = document.getElementById('load-more-btn');
+
       if (list.length === 0) {
         container.innerHTML = '';
+        loadMoreEl.style.display = 'none';
         return;
       }
 
-      const display = list.slice(0, 100);
+      // Calculate how many to show
+      const end = Math.min(state.loadMoreIndex + state.loadMoreStep, list.length);
+      const display = list.slice(0, end);
+      state.loadMoreIndex = end;
+
       container.innerHTML = display.map(r => {
         const dist = r.distance ? formatDist(r.distance) : '';
         const district = r.district_tc || r.district || '';
@@ -939,12 +1079,18 @@
         }
         thumbHtml += '</div>';
 
-        return '<div class="rest-card" data-id="' + r.id + '">' +
+        let tags = '';
+        if (district) tags += '<span class="tag tag-district">' + escHtml(district) + '</span>';
+        if (dist) tags += '<span class="tag tag-distance">' + dist + '</span>';
+        if (r.cuisine) tags += '<span class="tag tag-cuisine">' + escHtml(r.cuisine.split(',')[0]) + '</span>';
+        if (price) tags += '<span class="tag tag-price">' + escHtml(price.trim()) + '</span>';
+
+        return '<div class="rest-card" data-id="' + escAttr(r.id) + '">' +
           '<div class="rest-card-top">' +
             thumbHtml +
             '<div class="rest-card-body">' +
-              '<div class="rest-name">' + (r.name || '') + '</div>' +
-              (r.name_en && r.name_en !== r.name ? '<div class="rest-name-en">' + r.name_en + '</div>' : '') +
+              '<div class="rest-name">' + escHtml(r.name || '') + '</div>' +
+              (r.name_en && r.name_en !== r.name ? '<div class="rest-name-en">' + escHtml(r.name_en) + '</div>' : '') +
               (stars ? '<div class="rest-rating">' +
                 '<span class="stars">' + stars + '</span>' +
                 '<span class="rating-num">' + r.rating + '</span>' +
@@ -954,11 +1100,7 @@
                 (dist ? '<span class="rest-info-item">' + dist + '</span>' : '') +
                 (price ? '<span class="rest-info-item">' + price + '</span>' : '') +
               '</div>' +
-              '<div class="rest-tags">' +
-                (district ? '<span class="tag tag-district">' + district + '</span>' : '') +
-                (dist ? '<span class="tag tag-distance">' + dist + '</span>' : '') +
-                (r.cuisine ? '<span class="tag tag-cuisine">' + r.cuisine.split(',')[0] + '</span>' : '') +
-              '</div>' +
+              '<div class="rest-tags">' + tags + '</div>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -968,9 +1110,111 @@
         card.addEventListener('click', () => showDetail(card.dataset.id));
       });
 
-      if (list.length > 100) {
-        container.innerHTML += '<div class="empty" style="padding:20px;">還有 ' + (list.length - 100) + ' 家餐廳，請縮小搜尋範圍</div>';
+      // Show load more button
+      if (end < list.length) {
+        loadMoreBtn.textContent = '載入更多 (' + (list.length - end) + ' 家)';
+        loadMoreEl.style.display = 'block';
+      } else {
+        loadMoreEl.style.display = 'none';
       }
+    }
+
+    // -- Favorites Page --
+    let favSortMode = 'recent';
+
+    function showFavoritesPage() {
+      document.getElementById('fav-page').classList.add('active');
+      document.getElementById('view-toggle').style.display = 'none';
+      document.getElementById('random-pick-btn').style.display = 'none';
+      renderFavorites();
+    }
+
+    function hideFavoritesPage() {
+      document.getElementById('fav-page').classList.remove('active');
+      document.getElementById('view-toggle').style.display = '';
+      document.getElementById('random-pick-btn').style.display = '';
+    }
+
+    function renderFavorites() {
+      const favIds = Store.getFavorites();
+      const container = document.getElementById('fav-list');
+      const emptyEl = document.getElementById('fav-empty');
+
+      if (favIds.length === 0) {
+        container.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+      }
+      emptyEl.style.display = 'none';
+
+      // Get favorite restaurants from both data sources
+      const allData = [...state.restaurants, ...state.placesData];
+      let favs = favIds.map(id => allData.find(r => r.id === id)).filter(Boolean);
+
+      // Sort
+      switch (favSortMode) {
+        case 'name': favs.sort((a, b) => (a.name || '').localeCompare(b.name || '')); break;
+        case 'distance':
+          if (state.currentLocation) {
+            favs = favs.map(r => ({
+              ...r,
+              _favDist: haversine(state.currentLocation.lat, state.currentLocation.lng, parseFloat(r.lat), parseFloat(r.lng))
+            }));
+            favs.sort((a, b) => (a._favDist || Infinity) - (b._favDist || Infinity));
+          }
+          break;
+        case 'recent':
+        default:
+          favs.reverse();
+          break;
+      }
+
+      container.innerHTML = favs.map(r => {
+        const dist = state.currentLocation ? formatDist(haversine(state.currentLocation.lat, state.currentLocation.lng, parseFloat(r.lat), parseFloat(r.lng))) : '';
+        const district = r.district_tc || r.district || '';
+        const stars = r.rating ? renderStars(r.rating) : '';
+        const price = r.price_level ? priceLevel(r.price_level) : '';
+
+        let thumbHtml = '<div class="rest-card-thumb">';
+        if (r.photos && r.photos.length > 0) {
+          thumbHtml += '<img src="' + r.photos[0] + '" alt="" loading="lazy" />';
+        } else {
+          thumbHtml += '\uD83C\uDF7D\uFE0F';
+        }
+        thumbHtml += '</div>';
+
+        let tags = '';
+        if (district) tags += '<span class="tag tag-district">' + escHtml(district) + '</span>';
+        if (dist) tags += '<span class="tag tag-distance">' + dist + '</span>';
+        if (r.cuisine) tags += '<span class="tag tag-cuisine">' + escHtml(r.cuisine.split(',')[0]) + '</span>';
+
+        return '<div class="rest-card" data-id="' + escAttr(r.id) + '">' +
+          '<div class="rest-card-top">' +
+            thumbHtml +
+            '<div class="rest-card-body">' +
+              '<div class="rest-name">' + escHtml(r.name || '') + '</div>' +
+              (r.name_en && r.name_en !== r.name ? '<div class="rest-name-en">' + escHtml(r.name_en) + '</div>' : '') +
+              (stars ? '<div class="rest-rating">' +
+                '<span class="stars">' + stars + '</span>' +
+                '<span class="rating-num">' + r.rating + '</span>' +
+                (r.user_ratings_total ? '<span class="rating-count">(' + r.user_ratings_total + ')</span>' : '') +
+              '</div>' : '') +
+              '<div class="rest-info">' +
+                (dist ? '<span class="rest-info-item">' + dist + '</span>' : '') +
+                (price ? '<span class="rest-info-item">' + price + '</span>' : '') +
+              '</div>' +
+              '<div class="rest-tags">' + tags + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      container.querySelectorAll('.rest-card').forEach(card => {
+        card.addEventListener('click', () => {
+          hideFavoritesPage();
+          showDetail(card.dataset.id);
+        });
+      });
     }
 
     // -- Random Pick --
@@ -1070,6 +1314,14 @@
     }
 
     // -- Google Map --
+    const mapTypes = {
+      roadmap: google.maps.MapTypeId.ROADMAP,
+      satellite: google.maps.MapTypeId.SATELLITE,
+      terrain: google.maps.MapTypeId.TERRAIN,
+      hybrid: google.maps.MapTypeId.HYBRID,
+    };
+    let currentMapType = 'roadmap';
+
     function initMap() {
       if (state.map) return;
       const loc = state.currentLocation;
@@ -1106,6 +1358,17 @@
       state.placesService = new google.maps.places.PlacesService(state.map);
 
       renderMapMarkers(state.filtered || (state.dataSource === 'places' ? state.placesData : state.restaurants));
+    }
+
+    function switchMapType(name) {
+      if (!state.map || !mapTypes[name]) return;
+      state.map.setMapTypeId(mapTypes[name]);
+      currentMapType = name;
+
+      // Update toggle buttons
+      document.querySelectorAll('#map-tile-toggle button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tile === name);
+      });
     }
 
     function renderMapMarkers(list) {
@@ -1151,6 +1414,12 @@
 
       const loc = state.currentLocation;
       const dist = loc ? formatDist(haversine(loc.lat, loc.lng, parseFloat(r.lat), parseFloat(r.lng))) : '';
+      const isFav = Store.isFav(r.id);
+
+      // Update fav button
+      const favBtn = document.getElementById('detail-fav');
+      favBtn.textContent = isFav ? '\u2665' : '\u2661';
+      favBtn.className = 'detail-fav' + (isFav ? ' is-fav' : '');
 
       // For Places data, fetch details on demand
       let photosHtml = '';
@@ -1163,8 +1432,8 @@
       const content = document.getElementById('detail-content');
       content.innerHTML =
         '<div class="detail-hero">' +
-          '<div class="detail-name">' + (r.name || '') + '</div>' +
-          (r.name_en && r.name_en !== r.name ? '<div class="detail-name-en">' + r.name_en + '</div>' : '') +
+          '<div class="detail-name">' + escHtml(r.name || '') + '</div>' +
+          (r.name_en && r.name_en !== r.name ? '<div class="detail-name-en">' + escHtml(r.name_en) + '</div>' : '') +
           (r.rating ? '<div class="detail-rating-row">' +
             '<span class="detail-stars">' + renderStars(r.rating) + '</span>' +
             '<span class="detail-rating-score">' + r.rating + '</span>' +
@@ -1179,13 +1448,13 @@
         photosHtml +
         '<div class="detail-section">' +
           '<div class="detail-section-title">地址</div>' +
-          '<div class="detail-address">' + (r.address || '暫無地址資料') + '</div>' +
+          '<div class="detail-address">' + escHtml(r.address || '暫無地址資料') + '</div>' +
         '</div>' +
         (r.source === 'fehd' ? '<div class="detail-section">' +
           '<div class="detail-section-title">牌照資料</div>' +
           '<div class="detail-address">' +
-            '類型: ' + (r.licence_type || '—') + '<br/>' +
-            '有效期至: ' + (r.expiry || '—') +
+            '類型: ' + escHtml(r.licence_type || '—') + '<br/>' +
+            '有效期至: ' + escHtml(r.expiry || '—') +
           '</div>' +
         '</div>' : '') +
         (r.place_id ? '<div class="detail-section" id="detail-hours-section">' +
@@ -1299,6 +1568,7 @@
       state.filtered = [];
       state.loadedDistricts.clear();
       state.placesLoaded = false;
+      state.loadingErrors = [];
 
       // Update map center
       if (state.map) {
@@ -1448,6 +1718,16 @@
         btn.addEventListener('click', () => setView(btn.dataset.view));
       });
 
+      // Map type toggle (roadmap/satellite/terrain/hybrid)
+      document.querySelectorAll('#map-tile-toggle button').forEach(btn => {
+        btn.addEventListener('click', () => switchMapType(btn.dataset.tile));
+      });
+
+      // Load more button
+      document.getElementById('load-more-btn').addEventListener('click', () => {
+        updateDisplay(false);
+      });
+
       // Location button
       document.getElementById('loc-btn').addEventListener('click', showLocationModal);
       document.getElementById('loc-modal').addEventListener('click', (e) => {
@@ -1455,9 +1735,41 @@
       });
       document.getElementById('gps-btn').addEventListener('click', useGPS);
 
+      // Favorites button
+      document.getElementById('fav-btn').addEventListener('click', showFavoritesPage);
+      document.getElementById('fav-back').addEventListener('click', hideFavoritesPage);
+
+      // Favorite sort buttons
+      document.querySelectorAll('.fav-sort-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.fav-sort-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          favSortMode = btn.dataset.favSort;
+          renderFavorites();
+        });
+      });
+
       // Detail back
       document.getElementById('detail-back').addEventListener('click', () => {
         document.getElementById('detail-view').classList.remove('active');
+      });
+
+      // Detail favorite toggle
+      document.getElementById('detail-fav').addEventListener('click', () => {
+        const detailEl = document.getElementById('detail-view');
+        // Find the current restaurant being displayed
+        const content = document.getElementById('detail-content');
+        const nameEl = content.querySelector('.detail-name');
+        if (!nameEl) return;
+        const name = nameEl.textContent;
+        const allData = [...state.restaurants, ...state.placesData];
+        const r = allData.find(x => x.name === name);
+        if (!r) return;
+        const added = Store.toggleFav(r.id);
+        const favBtn = document.getElementById('detail-fav');
+        favBtn.textContent = added ? '\u2665' : '\u2661';
+        favBtn.className = 'detail-fav' + (added ? ' is-fav' : '');
+        showToast(added ? '已收藏' : '已取消收藏');
       });
 
       // Map panel close
