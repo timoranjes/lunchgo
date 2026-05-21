@@ -68,6 +68,13 @@
       content: ""; position: absolute; left: 22px; top: 50%; transform: translateY(-50%) rotate(-45deg);
       width: 6px; height: 2px; background: var(--text-muted);
     }
+    .search-clear {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      width: 20px; height: 20px; border-radius: 50%; border: none;
+      background: var(--text-muted); color: #fff; font-size: 12px;
+      cursor: pointer; display: none; align-items: center; justify-content: center;
+    }
+    .search-clear.visible { display: flex; }
 
     /* -- Toolbar -- */
     .toolbar {
@@ -276,6 +283,116 @@
     }
     .source-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 
+    /* -- Random Pick Modal -- */
+    .random-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 4000;
+      background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .random-overlay.active { display: flex; }
+    .random-card {
+      background: var(--card); border-radius: 20px; width: 100%; max-width: 380px;
+      box-shadow: var(--shadow-lg); overflow: hidden;
+      animation: randomSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes randomSlideUp {
+      from { transform: translateY(40px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .random-header {
+      background: linear-gradient(135deg, var(--brand), #06a850);
+      padding: 20px; text-align: center; color: #fff;
+    }
+    .random-header h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .random-header p { font-size: 13px; opacity: 0.9; }
+    .random-result { padding: 20px; text-align: center; }
+    .random-result-name { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .random-result-detail { font-size: 14px; color: var(--text-secondary); margin-bottom: 4px; }
+    .random-result-rating { margin: 12px 0; }
+    .random-actions { display: flex; gap: 12px; padding: 0 20px 20px; }
+    .random-actions .action-btn { font-size: 13px; padding: 10px; }
+    .random-rolling {
+      padding: 30px 20px; text-align: center;
+    }
+    .random-rolling-name {
+      font-size: 20px; font-weight: 600; color: var(--text);
+      animation: rollingPulse 0.1s ease-in-out infinite alternate;
+    }
+    @keyframes rollingPulse {
+      from { opacity: 0.7; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .random-close {
+      position: absolute; top: 12px; right: 12px; width: 32px; height: 32px;
+      border-radius: 50%; border: none; background: rgba(255,255,255,0.2);
+      color: #fff; font-size: 18px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* -- Discovery Section -- */
+    .discovery-section {
+      background: var(--card); margin: 8px 16px; border-radius: var(--radius);
+      box-shadow: var(--shadow); overflow: hidden;
+    }
+    .discovery-header {
+      padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .discovery-title {
+      font-size: 15px; font-weight: 700; color: var(--text);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .discovery-title::before {
+      content: ""; display: inline-block; width: 16px; height: 16px;
+      background: var(--star); mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'/%3E%3C/svg%3E") no-repeat center;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'/%3E%3C/svg%3E") no-repeat center;
+    }
+    .discovery-subtitle { font-size: 12px; color: var(--text-muted); }
+    .discovery-scroll {
+      display: flex; gap: 12px; padding: 12px 16px; overflow-x: auto;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .discovery-scroll::-webkit-scrollbar { display: none; }
+    .discovery-card {
+      flex-shrink: 0; width: 160px; background: var(--bg); border-radius: 10px;
+      overflow: hidden; cursor: pointer; transition: transform 0.15s;
+    }
+    .discovery-card:active { transform: scale(0.97); }
+    .discovery-card-img {
+      width: 100%; height: 100px; background: var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; overflow: hidden;
+    }
+    .discovery-card-img img { width: 100%; height: 100%; object-fit: cover; }
+    .discovery-card-body { padding: 8px; }
+    .discovery-card-name {
+      font-size: 13px; font-weight: 600; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;
+    }
+    .discovery-card-meta { font-size: 11px; color: var(--text-muted); }
+    .discovery-card-rating {
+      display: flex; align-items: center; gap: 3px; margin-top: 4px;
+    }
+    .discovery-card-rating .stars { font-size: 10px; }
+    .discovery-card-rating .rating-num { font-size: 11px; font-weight: 600; }
+
+    /* -- Random Pick Button -- */
+    .random-pick-btn {
+      position: fixed; bottom: 20px; left: 20px; z-index: 999;
+      background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+      color: #fff; border: none; border-radius: 24px;
+      padding: 10px 18px; font-size: 13px; font-weight: 600;
+      box-shadow: 0 4px 12px rgba(255,107,107,0.4);
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .random-pick-btn:active { transform: scale(0.95); }
+    .random-pick-btn::before {
+      content: ""; display: inline-block; width: 16px; height: 16px;
+      background: #fff; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'/%3E%3C/svg%3E") no-repeat center;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'/%3E%3C/svg%3E") no-repeat center;
+    }
+
     /* -- Google Maps overrides -- */
     .gm-style-iw-d { overflow: hidden !important; }
   </style>
@@ -290,6 +407,7 @@
     </div>
     <div class="search-bar">
       <input type="text" id="search-input" placeholder="搜尋餐廳名稱、地址、地區..." />
+      <button class="search-clear" id="search-clear">×</button>
     </div>
   </div>
 
@@ -309,6 +427,17 @@
 
   <!-- Cuisine Filter -->
   <div class="cuisine-bar" id="cuisine-bar"></div>
+
+  <!-- Discovery Section -->
+  <div class="discovery-section" id="discovery-section" style="display:none;">
+    <div class="discovery-header">
+      <div>
+        <div class="discovery-title">好去處推薦</div>
+        <div class="discovery-subtitle" id="discovery-subtitle">高分餐廳</div>
+      </div>
+    </div>
+    <div class="discovery-scroll" id="discovery-scroll"></div>
+  </div>
 
   <!-- List View -->
   <div class="list-container" id="list-view">
@@ -348,27 +477,59 @@
     </div>
   </div>
 
+  <!-- Random Pick Modal -->
+  <div class="random-overlay" id="random-overlay">
+    <div class="random-card">
+      <div class="random-header" style="position:relative;">
+        <button class="random-close" id="random-close">×</button>
+        <h2>今天吃什麼？</h2>
+        <p id="random-subtitle">讓我幫你決定！</p>
+      </div>
+      <div id="random-body">
+        <div class="random-rolling">
+          <div class="random-rolling-name" id="random-rolling-name">...</div>
+        </div>
+      </div>
+      <div id="random-footer" style="display:none;">
+        <div class="random-result">
+          <div class="random-result-name" id="random-result-name"></div>
+          <div class="random-result-detail" id="random-result-detail"></div>
+          <div class="random-result-rating" id="random-result-rating"></div>
+        </div>
+        <div class="random-actions">
+          <button class="action-btn action-btn-secondary" id="random-reroll">再選一次</button>
+          <button class="action-btn action-btn-primary" id="random-view">查看詳情</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- View Toggle -->
   <div class="view-toggle">
     <button class="view-btn active" data-view="list">列表</button>
     <button class="view-btn" data-view="map">地圖</button>
   </div>
 
+  <!-- Random Pick Button -->
+  <button class="random-pick-btn" id="random-pick-btn">今天吃什麼</button>
+
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
   <!-- Google Maps + Places -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_API_KEY_PLACEHOLDER&libraries=places&language=zh-TW&region=HK"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=***&libraries=places&language=zh-TW&region=HK"></script>
 
   <script>
     // -- Config --
     const GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY_HERE';
     const DISTRICT_INDEX_URL = 'data/district_index.json';
 
-    // Cuisine filter options
+    // Expanded cuisine filter options
     const CUISINES = [
       { id: 'all', label: '全部' },
       { id: 'chinese', label: '中式' },
+      { id: 'noodle', label: '粉麵' },
+      { id: 'mixian', label: '米線' },
       { id: 'japanese', label: '日式' },
       { id: 'western', label: '西式' },
       { id: 'fast_food', label: '快餐' },
@@ -377,6 +538,9 @@
       { id: 'korean', label: '韓式' },
       { id: 'thai', label: '泰式' },
       { id: 'italian', label: '意式' },
+      { id: 'bbq', label: '燒烤' },
+      { id: 'hotpot', label: '火鍋' },
+      { id: 'dessert', label: '甜品' },
     ];
 
     // Default HK locations
@@ -406,6 +570,10 @@
       placesService: null,
       placesLoaded: false,
       autocomplete: null,
+      // Random pick state
+      randomPickResult: null,
+      // Discovery state
+      discoveryVisible: false,
     };
 
     // -- Storage --
@@ -450,23 +618,49 @@
       return '$'.repeat(n) + ' '.repeat(Math.max(0, 4 - n));
     }
 
+    // Expanded cuisine matching with mixian support
     function matchCuisine(place, cuisineId) {
       if (cuisineId === 'all') return true;
       const types = (place.types || []).join(' ').toLowerCase();
       const cuisine = (place.cuisine || '').toLowerCase();
       const name = (place.name || '').toLowerCase();
+      const nameCn = (place.name || '').toLowerCase();
+      const address = (place.address || '').toLowerCase();
+
       const map = {
         chinese: ['chinese', 'chinese_restaurant', 'dim_sum', 'cantonese', 'asian'],
-        japanese: ['japanese', 'japanese_restaurant', 'sushi', 'ramen'],
+        noodle: ['noodle', 'ramen', 'noodle_shop', '麵', '粉', '米线', '米線', '河粉', '伊麵', '意粉'],
+        mixian: ['mixian', '米線', '米线', '譚仔', '谭仔', '一風堂', 'monsoon'],
+        japanese: ['japanese', 'japanese_restaurant', 'sushi', 'ramen', '居酒屋', '日料'],
         western: ['western', 'american', 'european', 'french', 'british'],
-        fast_food: ['fast_food', 'meal_takeaway', 'meal_delivery'],
-        cafe: ['cafe', 'coffee', 'bakery', 'dessert'],
-        seafood: ['seafood'],
-        korean: ['korean', 'korean_restaurant'],
-        thai: ['thai', 'thai_restaurant'],
-        italian: ['italian', 'italian_restaurant', 'pizza'],
+        fast_food: ['fast_food', 'meal_takeaway', 'meal_delivery', '快餐', '茶餐廳', '冰室'],
+        cafe: ['cafe', 'coffee', 'bakery', 'dessert', '咖啡', 'cake'],
+        seafood: ['seafood', '海鮮'],
+        korean: ['korean', 'korean_restaurant', '韓式', 'bbq', '烤肉'],
+        thai: ['thai', 'thai_restaurant', '泰式'],
+        italian: ['italian', 'italian_restaurant', 'pizza', '意式'],
+        bbq: ['bbq', 'barbecue', '烧烤', '燒烤', '烤肉', '串燒'],
+        hotpot: ['hotpot', 'hot_pot', '火鍋', '打边炉', '打邊爐'],
+        dessert: ['dessert', 'dessert_shop', '甜品', '糖水', 'ice_cream', '冰淇淋'],
       };
       const keywords = map[cuisineId] || [];
+
+      // For mixian, also check if the name contains mixian-related terms in Chinese
+      if (cuisineId === 'mixian') {
+        if (nameCn.includes('米线') || nameCn.includes('米線') || nameCn.includes('譚仔') || nameCn.includes('谭仔')) {
+          return true;
+        }
+      }
+
+      // For noodle, check Chinese characters in name/address
+      if (cuisineId === 'noodle') {
+        if (nameCn.includes('麵') || nameCn.includes('面') || nameCn.includes('粉') ||
+            nameCn.includes('河粉') || nameCn.includes('伊麵') ||
+            address.includes('麵') || address.includes('粉')) {
+          return true;
+        }
+      }
+
       return keywords.some(k => types.includes(k) || cuisine.includes(k) || name.includes(k));
     }
 
@@ -650,6 +844,7 @@
       document.getElementById('result-count').textContent = countText;
 
       // Render
+      renderDiscovery(list);
       renderList(list);
       if (state.map) renderMapMarkers(list);
 
@@ -658,6 +853,68 @@
       if (list.length === 0 && total > 0) {
         document.getElementById('empty-state').style.display = 'block';
       }
+    }
+
+    // -- Discovery / Recommendations --
+    function renderDiscovery(list) {
+      const section = document.getElementById('discovery-section');
+      const scroll = document.getElementById('discovery-scroll');
+      const subtitle = document.getElementById('discovery-subtitle');
+
+      // Only show for places data (has ratings) or when we have rated FEHD entries
+      const rated = list.filter(r => r.rating && r.rating > 0);
+
+      if (rated.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = '';
+
+      // Sort by rating, then by review count
+      const sorted = [...rated].sort((a, b) => {
+        if (b.rating !== a.rating) return b.rating - a.rating;
+        return (b.user_ratings_total || 0) - (a.user_ratings_total || 0);
+      });
+
+      // Take top 20
+      const top = sorted.slice(0, 20);
+
+      // Determine subtitle based on filter state
+      if (state.activeCuisine !== 'all') {
+        const cuisineLabel = CUISINES.find(c => c.id === state.activeCuisine);
+        subtitle.textContent = (cuisineLabel ? cuisineLabel.label : '') + '高分餐廳';
+      } else {
+        subtitle.textContent = '評分 ' + top[0].rating.toFixed(1) + ' 起';
+      }
+
+      scroll.innerHTML = top.map(r => {
+        const dist = r.distance ? formatDist(r.distance) : '';
+        let imgHtml = '';
+        if (r.photos && r.photos.length > 0) {
+          imgHtml = '<img src="' + r.photos[0] + '" alt="" loading="lazy" />';
+        }
+
+        return '<div class="discovery-card" data-id="' + r.id + '">' +
+          '<div class="discovery-card-img">' + imgHtml + '</div>' +
+          '<div class="discovery-card-body">' +
+            '<div class="discovery-card-name">' + (r.name || '') + '</div>' +
+            '<div class="discovery-card-meta">' +
+              (dist ? dist + ' · ' : '') +
+              (r.price_level ? priceLevel(r.price_level) : '') +
+            '</div>' +
+            '<div class="discovery-card-rating">' +
+              '<span class="stars">' + renderStars(r.rating) + '</span>' +
+              '<span class="rating-num">' + r.rating + '</span>' +
+              (r.user_ratings_total ? '<span class="rating-count">(' + r.user_ratings_total + ')</span>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      scroll.querySelectorAll('.discovery-card').forEach(card => {
+        card.addEventListener('click', () => showDetail(card.dataset.id));
+      });
     }
 
     function renderList(list) {
@@ -714,6 +971,102 @@
       if (list.length > 100) {
         container.innerHTML += '<div class="empty" style="padding:20px;">還有 ' + (list.length - 100) + ' 家餐廳，請縮小搜尋範圍</div>';
       }
+    }
+
+    // -- Random Pick --
+    function openRandomPick() {
+      const overlay = document.getElementById('random-overlay');
+      const body = document.getElementById('random-body');
+      const footer = document.getElementById('random-footer');
+
+      // Get eligible restaurants from filtered list
+      const candidates = state.filtered.length > 0 ? state.filtered :
+        (state.dataSource === 'places' ? state.placesData : state.restaurants);
+
+      if (candidates.length === 0) {
+        showToast('暫無餐廳可選');
+        return;
+      }
+
+      overlay.classList.add('active');
+      footer.style.display = 'none';
+
+      // Rolling animation
+      let rollCount = 0;
+      const maxRolls = 20;
+      const rollInterval = setInterval(() => {
+        const randomIdx = Math.floor(Math.random() * candidates.length);
+        const r = candidates[randomIdx];
+        document.getElementById('random-rolling-name').textContent = r.name || '未知餐廳';
+        rollCount++;
+
+        if (rollCount >= maxRolls) {
+          clearInterval(rollInterval);
+          showRandomResult(candidates);
+        }
+      }, 80);
+    }
+
+    function showRandomResult(candidates) {
+      const idx = Math.floor(Math.random() * candidates.length);
+      const r = candidates[idx];
+      state.randomPickResult = r;
+
+      const body = document.getElementById('random-body');
+      const footer = document.getElementById('random-footer');
+      const subtitle = document.getElementById('random-subtitle');
+
+      const dist = r.distance ? formatDist(r.distance) : '';
+      const district = r.district_tc || r.district || '';
+      const detailParts = [];
+      if (district) detailParts.push(district);
+      if (dist) detailParts.push(dist);
+      if (r.price_level) detailParts.push(priceLevel(r.price_level));
+
+      body.style.display = 'none';
+      footer.style.display = '';
+      subtitle.textContent = '找到了！';
+
+      document.getElementById('random-result-name').textContent = r.name || '未知餐廳';
+      document.getElementById('random-result-detail').textContent = detailParts.join(' · ') || '';
+      document.getElementById('random-result-rating').innerHTML = r.rating ?
+        '<span class="stars" style="color:var(--star);font-size:14px;">' + renderStars(r.rating) + '</span>' +
+        ' <span style="font-weight:600;">' + r.rating + '</span>' +
+        (r.user_ratings_total ? ' <span style="color:var(--text-muted);font-size:12px;">(' + r.user_ratings_total + ' 則)</span>' : '')
+        : '<span style="color:var(--text-muted);">暫無評分</span>';
+    }
+
+    function closeRandomPick() {
+      document.getElementById('random-overlay').classList.remove('active');
+      state.randomPickResult = null;
+    }
+
+    function rerollRandom() {
+      const candidates = state.filtered.length > 0 ? state.filtered :
+        (state.dataSource === 'places' ? state.placesData : state.restaurants);
+
+      if (candidates.length === 0) return;
+
+      const body = document.getElementById('random-body');
+      const footer = document.getElementById('random-footer');
+
+      body.style.display = '';
+      footer.style.display = 'none';
+      document.getElementById('random-subtitle').textContent = '再選一次...';
+
+      let rollCount = 0;
+      const maxRolls = 15;
+      const rollInterval = setInterval(() => {
+        const randomIdx = Math.floor(Math.random() * candidates.length);
+        const r = candidates[randomIdx];
+        document.getElementById('random-rolling-name').textContent = r.name || '未知餐廳';
+        rollCount++;
+
+        if (rollCount >= maxRolls) {
+          clearInterval(rollInterval);
+          showRandomResult(candidates);
+        }
+      }, 70);
     }
 
     // -- Google Map --
@@ -792,6 +1145,9 @@
       const allData = [...state.restaurants, ...state.placesData];
       const r = allData.find(x => x.id === id);
       if (!r) return;
+
+      // Close random pick if open
+      closeRandomPick();
 
       const loc = state.currentLocation;
       const dist = loc ? formatDist(haversine(loc.lat, loc.lng, parseFloat(r.lat), parseFloat(r.lng))) : '';
@@ -1000,6 +1356,7 @@
         document.querySelector('.source-toggle').style.display = '';
         document.querySelector('.toolbar').style.display = '';
         document.querySelector('.cuisine-bar').style.display = '';
+        document.getElementById('discovery-section').style.display = state.filtered.filter(r => r.rating && r.rating > 0).length > 0 ? '' : 'none';
       } else {
         document.getElementById('list-view').style.display = 'none';
         document.getElementById('map-view').classList.add('active');
@@ -1007,6 +1364,7 @@
         document.querySelector('.source-toggle').style.display = '';
         document.querySelector('.toolbar').style.display = '';
         document.querySelector('.cuisine-bar').style.display = '';
+        document.getElementById('discovery-section').style.display = 'none';
         initMap();
         setTimeout(() => {
           if (state.map) {
@@ -1046,12 +1404,23 @@
 
       // Search with debounce
       let searchTimer;
-      document.getElementById('search-input').addEventListener('input', (e) => {
+      const searchInput = document.getElementById('search-input');
+      const searchClear = document.getElementById('search-clear');
+
+      searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => {
           state.searchQuery = e.target.value.trim();
+          searchClear.classList.toggle('visible', state.searchQuery.length > 0);
           updateDisplay();
         }, 200);
+      });
+
+      searchClear.addEventListener('click', () => {
+        searchInput.value = '';
+        state.searchQuery = '';
+        searchClear.classList.remove('visible');
+        updateDisplay();
       });
 
       // Sort buttons
@@ -1098,6 +1467,19 @@
 
       // Cuisine bar
       renderCuisineBar();
+
+      // Random pick
+      document.getElementById('random-pick-btn').addEventListener('click', openRandomPick);
+      document.getElementById('random-close').addEventListener('click', closeRandomPick);
+      document.getElementById('random-overlay').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeRandomPick();
+      });
+      document.getElementById('random-reroll').addEventListener('click', rerollRandom);
+      document.getElementById('random-view').addEventListener('click', () => {
+        if (state.randomPickResult) {
+          showDetail(state.randomPickResult.id);
+        }
+      });
 
       // Load data
       loadRestaurants();
