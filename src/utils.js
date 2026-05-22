@@ -170,3 +170,31 @@ export function matchCuisine(place, cuisineId) {
     (k) => types.includes(k) || cuisine.includes(k) || name.includes(k)
   );
 }
+
+/**
+ * Validate a restaurant object for display-worthiness.
+ * Filters out entries with missing/invalid names, bad coordinates,
+ * and unmatched FEHD records that have fake hash-generated locations.
+ *
+ * @param {import('./types.js').Restaurant} restaurant - Restaurant to validate
+ * @returns {boolean} True if the restaurant should be displayed
+ */
+export function isValidRestaurant(restaurant) {
+  const name = (restaurant.name || '').trim();
+  if (name.length < 2) return false;
+
+  if (restaurant.lat === undefined || restaurant.lat === null ||
+      restaurant.lng === undefined || restaurant.lng === null) {
+    return false;
+  }
+
+  const lat = parseFloat(/** @type {string} */ (restaurant.lat));
+  const lng = parseFloat(/** @type {string} */ (restaurant.lng));
+
+  if (!isFinite(lat) || !isFinite(lng)) return false;
+  if (lat === 0 && lng === 0) return false;
+  if (lat < 22.11 || lat > 22.57 || lng < 113.83 || lng > 114.43) return false;
+  if (restaurant.source === 'fehd') return false;
+
+  return true;
+}
