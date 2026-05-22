@@ -6,9 +6,10 @@
       "work_id": "lunchgo-bugfixes-a2e3c4f5",
       "active_plan": "/home/timo_liao/projects/lunchgo/.omo/plans/lunchgo-bugfixes.md",
       "plan_name": "lunchgo-bugfixes",
-      "status": "active",
+      "status": "completed",
       "started_at": "2026-05-22T06:15:00.000Z",
-      "updated_at": "2026-05-22T08:23:34.575Z",
+      "updated_at": "2026-05-22T08:30:00.000Z",
+      "ended_at": "2026-05-22T08:30:00.000Z",
       "session_ids": [
         "ses_1b26540c4ffe50IIYx54Ll38MY"
       ],
@@ -125,8 +126,9 @@
   },
   "active_plan": "/home/timo_liao/projects/lunchgo/.omo/plans/lunchgo-bugfixes.md",
   "started_at": "2026-05-22T06:15:00.000Z",
-  "status": "active",
-  "updated_at": "2026-05-22T08:23:34.575Z",
+  "status": "completed",
+  "updated_at": "2026-05-22T08:30:00.000Z",
+  "ended_at": "2026-05-22T08:30:00.000Z",
   "session_ids": [
     "ses_1b26540c4ffe50IIYx54Ll38MY"
   ],
