@@ -129,7 +129,13 @@
 
     /* -- Restaurant List -- */
     .list-container { padding: 8px 16px 80px; }
-    .result-count { font-size: 12px; color: var(--text-muted); padding: 4px 0 8px; }
+
+    /* -- List Header -- */
+    .list-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 0 8px; gap: 8px;
+    }
+    .result-count { font-size: 12px; color: var(--text-muted); }
     .rest-card {
       background: var(--card); border-radius: var(--radius); padding: 14px;
       margin-bottom: 8px; box-shadow: var(--shadow); cursor: pointer;
@@ -507,17 +513,17 @@
 
     /* -- Random Pick Button -- */
     .random-pick-btn {
-      position: fixed; bottom: 20px; left: 20px; z-index: 999;
       background: linear-gradient(135deg, #FF6B6B, #FF8E53);
       color: #fff; border: none; border-radius: 24px;
-      padding: 10px 18px; font-size: 13px; font-weight: 600;
-      box-shadow: 0 4px 12px rgba(255,107,107,0.4);
-      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; font-size: 12px; font-weight: 600;
+      box-shadow: 0 2px 8px rgba(255,107,107,0.3);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
       transition: transform 0.15s, box-shadow 0.15s;
+      white-space: nowrap; flex-shrink: 0;
     }
     .random-pick-btn:active { transform: scale(0.95); }
     .random-pick-btn::before {
-      content: ""; display: inline-block; width: 16px; height: 16px;
+      content: ""; display: inline-block; width: 14px; height: 14px;
       background: #fff; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'/%3E%3C/svg%3E") no-repeat center;
       -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'/%3E%3C/svg%3E") no-repeat center;
     }

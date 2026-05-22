@@ -51,7 +51,10 @@
 
   <!-- List View -->
   <div class="list-container" id="list-view">
-    <div class="result-count" id="result-count"></div>
+    <div class="list-header">
+      <div class="result-count" id="result-count"></div>
+      <button class="random-pick-btn" id="random-pick-btn">今天吃什麼</button>
+    </div>
     <div id="rest-list"></div>
     <div class="load-more" id="load-more" style="display:none;">
       <button id="load-more-btn">載入更多</button>
@@ -173,9 +176,6 @@
     <button class="view-btn active" data-view="list">列表</button>
     <button class="view-btn" data-view="map">地圖</button>
   </div>
-
-  <!-- Random Pick Button -->
-  <button class="random-pick-btn" id="random-pick-btn">今天吃什麼</button>
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>
