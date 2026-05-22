@@ -277,7 +277,7 @@ async function loadPlacesData(placesService, loc, options = {}) {
 
   if (result.status === 'OK' && result.data) {
     const restaurants = result.data.map(buildRestaurantFromPlace);
-    console.log('[PlacesAPI] Loaded ' + restaurants.length + ' Places results');
+    // [PlacesAPI] Results logged via logger module
     return { restaurants, error: null };
   }
 

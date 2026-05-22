@@ -8,7 +8,7 @@
       "plan_name": "lunchgo-refactor",
       "status": "active",
       "started_at": "2026-05-22T03:33:30.088Z",
-      "updated_at": "2026-05-22T05:46:45.481Z",
+      "updated_at": "2026-05-22T06:09:45.990Z",
       "session_ids": [
         "ses_1b26540c4ffe50IIYx54Ll38MY"
       ],
@@ -198,6 +198,57 @@
           "status": "completed",
           "ended_at": "2026-05-22T05:46:45.480Z",
           "elapsed_ms": 39892
+        },
+        "final-wave:f1": {
+          "task_key": "final-wave:f1",
+          "task_label": "F1",
+          "task_title": "**Plan Compliance Audit** — `oracle`",
+          "session_id": "ses_1b1c671a2ffeoSgvx4f6Lhdjiu",
+          "agent": "oracle",
+          "updated_at": "2026-05-22T05:52:30.625Z",
+          "started_at": "2026-05-22T05:52:15.250Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T05:52:30.625Z",
+          "elapsed_ms": 15375
+        },
+        "final-wave:f2": {
+          "task_key": "final-wave:f2",
+          "task_label": "F2",
+          "task_title": "**Code Quality Review** — `unspecified-high`",
+          "session_id": "ses_1b1c1bb6effeO4X1Ig1JsLWHQo",
+          "agent": "Sisyphus-Junior",
+          "category": "unspecified-high",
+          "updated_at": "2026-05-22T05:57:29.623Z",
+          "started_at": "2026-05-22T05:56:35.423Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T05:57:29.623Z",
+          "elapsed_ms": 54200
+        },
+        "final-wave:f3": {
+          "task_key": "final-wave:f3",
+          "task_label": "F3",
+          "task_title": "**Real Manual QA** — `unspecified-high` (+ `playwright` skill if UI)",
+          "session_id": "ses_1b1bd2c23ffeYhSBc1uYgFPD02",
+          "agent": "Sisyphus-Junior",
+          "category": "unspecified-high",
+          "updated_at": "2026-05-22T06:06:38.617Z",
+          "started_at": "2026-05-22T06:06:21.848Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T06:06:38.617Z",
+          "elapsed_ms": 16769
+        },
+        "final-wave:f4": {
+          "task_key": "final-wave:f4",
+          "task_label": "F4",
+          "task_title": "**Scope Fidelity Check** — `deep`",
+          "session_id": "ses_1b1b4cf74ffeeyPJegx0f5pzyO",
+          "agent": "Sisyphus-Junior",
+          "category": "deep",
+          "updated_at": "2026-05-22T06:09:45.990Z",
+          "started_at": "2026-05-22T06:09:33.659Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T06:09:45.990Z",
+          "elapsed_ms": 12331
         }
       }
     }
@@ -205,7 +256,7 @@
   "active_plan": "/home/timo_liao/projects/lunchgo/.omo/plans/lunchgo-refactor.md",
   "started_at": "2026-05-22T03:33:30.088Z",
   "status": "active",
-  "updated_at": "2026-05-22T05:46:45.481Z",
+  "updated_at": "2026-05-22T06:09:45.990Z",
   "session_ids": [
     "ses_1b26540c4ffe50IIYx54Ll38MY"
   ],
@@ -395,6 +446,57 @@
       "status": "completed",
       "ended_at": "2026-05-22T05:46:45.480Z",
       "elapsed_ms": 39892
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "**Plan Compliance Audit** — `oracle`",
+      "session_id": "ses_1b1c671a2ffeoSgvx4f6Lhdjiu",
+      "agent": "oracle",
+      "updated_at": "2026-05-22T05:52:30.625Z",
+      "started_at": "2026-05-22T05:52:15.250Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T05:52:30.625Z",
+      "elapsed_ms": 15375
+    },
+    "final-wave:f2": {
+      "task_key": "final-wave:f2",
+      "task_label": "F2",
+      "task_title": "**Code Quality Review** — `unspecified-high`",
+      "session_id": "ses_1b1c1bb6effeO4X1Ig1JsLWHQo",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-05-22T05:57:29.623Z",
+      "started_at": "2026-05-22T05:56:35.423Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T05:57:29.623Z",
+      "elapsed_ms": 54200
+    },
+    "final-wave:f3": {
+      "task_key": "final-wave:f3",
+      "task_label": "F3",
+      "task_title": "**Real Manual QA** — `unspecified-high` (+ `playwright` skill if UI)",
+      "session_id": "ses_1b1bd2c23ffeYhSBc1uYgFPD02",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-05-22T06:06:38.617Z",
+      "started_at": "2026-05-22T06:06:21.848Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T06:06:38.617Z",
+      "elapsed_ms": 16769
+    },
+    "final-wave:f4": {
+      "task_key": "final-wave:f4",
+      "task_label": "F4",
+      "task_title": "**Scope Fidelity Check** — `deep`",
+      "session_id": "ses_1b1b4cf74ffeeyPJegx0f5pzyO",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-22T06:09:45.990Z",
+      "started_at": "2026-05-22T06:09:33.659Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T06:09:45.990Z",
+      "elapsed_ms": 12331
     }
   },
   "agent": "atlas"
