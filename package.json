@@ -1,0 +1,16 @@
+{
+  "name": "lunchgo",
+  "version": "1.0.0",
+  "description": "H5 mobile web app for finding lunch spots in Hong Kong",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "typescript": "^6.0.3"
+  }
+}

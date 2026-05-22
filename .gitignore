@@ -7,3 +7,12 @@ __pycache__/
 
 # Old data (keep data/hk_restaurants.json in git)
 restaurants_hk.json
+
+# Node.js
+node_modules/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

@@ -1,0 +1,219 @@
+{
+  "schema_version": 2,
+  "active_work_id": "lunchgo-refactor-d1cfb1e2",
+  "works": {
+    "lunchgo-refactor-d1cfb1e2": {
+      "work_id": "lunchgo-refactor-d1cfb1e2",
+      "active_plan": "/home/timo_liao/projects/lunchgo/.omo/plans/lunchgo-refactor.md",
+      "plan_name": "lunchgo-refactor",
+      "status": "active",
+      "started_at": "2026-05-22T03:33:30.088Z",
+      "updated_at": "2026-05-22T04:10:31.804Z",
+      "session_ids": [
+        "ses_1b26540c4ffe50IIYx54Ll38MY"
+      ],
+      "session_origins": {
+        "ses_1b26540c4ffe50IIYx54Ll38MY": "direct"
+      },
+      "agent": "atlas",
+      "task_sessions": {
+        "todo:1": {
+          "task_key": "todo:1",
+          "task_label": "1",
+          "task_title": "Project scaffolding + package.json",
+          "session_id": "ses_1b23ff30fffeFqHcplwyPo3pdU",
+          "agent": "Sisyphus-Junior",
+          "category": "quick",
+          "updated_at": "2026-05-22T03:37:36.704Z",
+          "started_at": "2026-05-22T03:36:30.776Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T03:37:36.688Z",
+          "elapsed_ms": 65912
+        },
+        "todo:2": {
+          "task_key": "todo:2",
+          "task_label": "2",
+          "task_title": "CSS extraction + HTML cleanup",
+          "session_id": "ses_1b23d3c00ffeajMDadVpCKo0vY",
+          "agent": "Sisyphus-Junior",
+          "category": "visual-engineering",
+          "updated_at": "2026-05-22T03:45:07.372Z",
+          "started_at": "2026-05-22T03:44:31.807Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T03:45:07.372Z",
+          "elapsed_ms": 35565
+        },
+        "todo:3": {
+          "task_key": "todo:3",
+          "task_label": "3",
+          "task_title": "State management module",
+          "session_id": "ses_1b2365e1effehJhytUAdqPjvxm",
+          "agent": "Sisyphus-Junior",
+          "category": "deep",
+          "updated_at": "2026-05-22T03:48:50.433Z",
+          "started_at": "2026-05-22T03:48:00.586Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T03:48:50.433Z",
+          "elapsed_ms": 49847
+        },
+        "todo:4": {
+          "task_key": "todo:4",
+          "task_label": "4",
+          "task_title": "Store (localStorage) module",
+          "session_id": "ses_1b232f44fffeQ1jXqoGYXh3EDc",
+          "agent": "Sisyphus-Junior",
+          "category": "quick",
+          "updated_at": "2026-05-22T03:51:53.680Z",
+          "started_at": "2026-05-22T03:51:30.473Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T03:51:53.680Z",
+          "elapsed_ms": 23207
+        },
+        "todo:5": {
+          "task_key": "todo:5",
+          "task_label": "5",
+          "task_title": "Utility functions module",
+          "session_id": "ses_1b2302ad8ffeCrueP8QnaiHN2i",
+          "agent": "Sisyphus-Junior",
+          "category": "quick",
+          "updated_at": "2026-05-22T03:55:15.481Z",
+          "started_at": "2026-05-22T03:54:58.362Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T03:55:15.481Z",
+          "elapsed_ms": 17119
+        },
+        "todo:6": {
+          "task_key": "todo:6",
+          "task_label": "6",
+          "task_title": "Type definitions + JSDoc",
+          "session_id": "ses_1b22d148fffeLmmT5A9zrTVnqJ",
+          "agent": "Sisyphus-Junior",
+          "category": "writing",
+          "updated_at": "2026-05-22T04:08:15.362Z",
+          "started_at": "2026-05-22T04:07:43.569Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T04:08:15.361Z",
+          "elapsed_ms": 31792
+        },
+        "todo:7": {
+          "task_key": "todo:7",
+          "task_label": "7",
+          "task_title": "Python test infrastructure",
+          "session_id": "ses_1b22131dfffeqIiogo5CBTPSLS",
+          "agent": "Sisyphus-Junior",
+          "category": "quick",
+          "updated_at": "2026-05-22T04:10:31.804Z",
+          "started_at": "2026-05-22T04:09:53.752Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T04:10:31.804Z",
+          "elapsed_ms": 38052
+        }
+      }
+    }
+  },
+  "active_plan": "/home/timo_liao/projects/lunchgo/.omo/plans/lunchgo-refactor.md",
+  "started_at": "2026-05-22T03:33:30.088Z",
+  "status": "active",
+  "updated_at": "2026-05-22T04:10:31.804Z",
+  "session_ids": [
+    "ses_1b26540c4ffe50IIYx54Ll38MY"
+  ],
+  "session_origins": {
+    "ses_1b26540c4ffe50IIYx54Ll38MY": "direct"
+  },
+  "plan_name": "lunchgo-refactor",
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Project scaffolding + package.json",
+      "session_id": "ses_1b23ff30fffeFqHcplwyPo3pdU",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-22T03:37:36.704Z",
+      "started_at": "2026-05-22T03:36:30.776Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T03:37:36.688Z",
+      "elapsed_ms": 65912
+    },
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "CSS extraction + HTML cleanup",
+      "session_id": "ses_1b23d3c00ffeajMDadVpCKo0vY",
+      "agent": "Sisyphus-Junior",
+      "category": "visual-engineering",
+      "updated_at": "2026-05-22T03:45:07.372Z",
+      "started_at": "2026-05-22T03:44:31.807Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T03:45:07.372Z",
+      "elapsed_ms": 35565
+    },
+    "todo:3": {
+      "task_key": "todo:3",
+      "task_label": "3",
+      "task_title": "State management module",
+      "session_id": "ses_1b2365e1effehJhytUAdqPjvxm",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-22T03:48:50.433Z",
+      "started_at": "2026-05-22T03:48:00.586Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T03:48:50.433Z",
+      "elapsed_ms": 49847
+    },
+    "todo:4": {
+      "task_key": "todo:4",
+      "task_label": "4",
+      "task_title": "Store (localStorage) module",
+      "session_id": "ses_1b232f44fffeQ1jXqoGYXh3EDc",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-22T03:51:53.680Z",
+      "started_at": "2026-05-22T03:51:30.473Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T03:51:53.680Z",
+      "elapsed_ms": 23207
+    },
+    "todo:5": {
+      "task_key": "todo:5",
+      "task_label": "5",
+      "task_title": "Utility functions module",
+      "session_id": "ses_1b2302ad8ffeCrueP8QnaiHN2i",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-22T03:55:15.481Z",
+      "started_at": "2026-05-22T03:54:58.362Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T03:55:15.481Z",
+      "elapsed_ms": 17119
+    },
+    "todo:6": {
+      "task_key": "todo:6",
+      "task_label": "6",
+      "task_title": "Type definitions + JSDoc",
+      "session_id": "ses_1b22d148fffeLmmT5A9zrTVnqJ",
+      "agent": "Sisyphus-Junior",
+      "category": "writing",
+      "updated_at": "2026-05-22T04:08:15.362Z",
+      "started_at": "2026-05-22T04:07:43.569Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T04:08:15.361Z",
+      "elapsed_ms": 31792
+    },
+    "todo:7": {
+      "task_key": "todo:7",
+      "task_label": "7",
+      "task_title": "Python test infrastructure",
+      "session_id": "ses_1b22131dfffeqIiogo5CBTPSLS",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-22T04:10:31.804Z",
+      "started_at": "2026-05-22T04:09:53.752Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T04:10:31.804Z",
+      "elapsed_ms": 38052
+    }
+  },
+  "agent": "atlas"
+}
