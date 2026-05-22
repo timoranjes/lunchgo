@@ -32,6 +32,9 @@
   <!-- Cuisine Filter -->
   <div class="cuisine-bar" id="cuisine-bar"></div>
 
+  <!-- Price Filter -->
+  <div class="price-bar" id="price-bar"></div>
+
   <!-- Error Banner -->
   <div class="error-banner" id="error-banner"></div>
 
@@ -106,8 +109,14 @@
   <div class="modal-overlay" id="loc-modal">
     <div class="modal-content">
       <div class="modal-title">選擇地點</div>
-      <div id="loc-list"></div>
-      <button class="gps-btn" id="gps-btn">使用目前位置 (GPS)</button>
+      <div class="loc-search-bar">
+        <input type="text" id="loc-search-input" placeholder="搜尋地點..." autocomplete="off" />
+        <div id="loc-search-results" class="loc-search-results"></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="gps-btn" id="gps-btn" style="flex:1;">使用目前位置 (GPS)</button>
+        <button class="gps-btn" id="map-pick-loc-btn" style="flex:1;">在地圖上選點</button>
+      </div>
       <div class="custom-section">
         <div class="custom-section-title">我的地點</div>
         <div id="custom-loc-list"></div>

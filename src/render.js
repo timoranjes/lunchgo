@@ -379,6 +379,11 @@ export function updateDisplay(reset) {
     list = list.filter((r) => matchCuisine(r, state.activeCuisine));
   }
 
+  if (state.activePrice !== 'all') {
+    const targetPrice = parseInt(state.activePrice, 10);
+    list = list.filter((r) => r.price_level === targetPrice);
+  }
+
   const loc = state.currentLocation;
   if (loc) {
     list = list.map((r) => ({
@@ -600,17 +605,19 @@ export function renderMapMarkers(list) {
   state.markers = [];
 
   const bounds = state.map.getBounds();
-  const visible = list.filter((r) => {
-    if (!r.lat || !r.lng) return false;
-    try {
-      return bounds.contains({
-        lat: parseFloat(/** @type {string} */ (r.lat)),
-        lng: parseFloat(/** @type {string} */ (r.lng)),
-      });
-    } catch {
-      return false;
-    }
-  });
+  const visible = bounds
+    ? list.filter((r) => {
+        if (!r.lat || !r.lng) return false;
+        try {
+          return bounds.contains({
+            lat: parseFloat(/** @type {string} */ (r.lat)),
+            lng: parseFloat(/** @type {string} */ (r.lng)),
+          });
+        } catch {
+          return false;
+        }
+      })
+    : list.filter((r) => r.lat && r.lng);
 
   const display = visible.slice(0, 500);
   display.forEach((r) => {
@@ -1126,41 +1133,10 @@ export function setFavSortMode(mode) {
 /**
  * Show the location selection modal.
  *
- * @param {Array<{id: string, label: string, lat: number, lng: number}>} defaultLocations - Default HK locations
  * @param {function(Object): void} onSelectLocation - Callback when a location is selected
  */
-export function showLocationModal(defaultLocations, onSelectLocation) {
-  const locs = [...defaultLocations];
+export function showLocationModal(onSelectLocation) {
   const customLocs = Store.getCustomLocations();
-
-  const container = document.getElementById('loc-list');
-  if (container) {
-    container.innerHTML = locs
-      .map((l) => {
-        const isCurrent =
-          state.currentLocation && state.currentLocation.id === l.id;
-        return (
-          '<div class="loc-item" data-loc-id="' +
-          escAttr(l.id) +
-          '">' +
-          '<div>' +
-          '<div class="loc-item-name">' +
-          escHtml(l.label) +
-          '</div>' +
-          '</div>' +
-          (isCurrent ? '<span style="color:var(--brand);">目前</span>' : '') +
-          '</div>'
-        );
-      })
-      .join('');
-
-    container.querySelectorAll('.loc-item').forEach((item) => {
-      item.addEventListener('click', () => {
-        const loc = locs.find((l) => l.id === item.dataset.locId);
-        if (loc) onSelectLocation(loc);
-      });
-    });
-  }
 
   const customContainer = document.getElementById('custom-loc-list');
   if (customContainer) {
@@ -1200,7 +1176,7 @@ export function showLocationModal(defaultLocations, onSelectLocation) {
             e.stopPropagation();
             const delId = target.dataset.delId;
             Store.removeCustomLocation(delId);
-            showLocationModal(defaultLocations, onSelectLocation);
+            showLocationModal(onSelectLocation);
             return;
           }
           const cl = customLocs.find(

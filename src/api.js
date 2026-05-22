@@ -287,6 +287,33 @@ async function loadPlacesData(placesService, loc, options = {}) {
 }
 
 /**
+ * Load nearby restaurants with a 10-second timeout.
+ *
+ * @param {object} placesService - google.maps.places.PlacesService instance
+ * @param {Location} loc - Current location with { lat, lng }
+ * @param {object} [options]
+ * @returns {Promise<{ restaurants: Restaurant[], error: PlacesError|null }>}
+ */
+async function loadPlacesDataWithTimeout(placesService, loc, options = {}) {
+  const timeoutMs = 10000;
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Places API 請求逾時')), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([
+      loadPlacesData(placesService, loc, options),
+      timeoutPromise,
+    ]);
+  } catch (err) {
+    if (err.message && err.message.includes('逾時')) {
+      return { restaurants: [], error: { status: 'TIMEOUT', message: 'API 請求逾時，請稍後再試', kind: 'network' } };
+    }
+    return { restaurants: [], error: { status: 'UNKNOWN_ERROR', message: err.message || '未知錯誤', kind: 'unknown' } };
+  }
+}
+
+/**
  * Fetch detailed information for a single place.
  *
  * @param {object} placesService - google.maps.places.PlacesService instance
@@ -412,15 +439,15 @@ async function fetchPhotosForTopRestaurants(places, placesService, options = {})
  */
 async function loadPlacesDataLegacy(state, loc, onUpdateDisplay, onError) {
   if (!state.placesService || state.placesLoaded) return;
-  state.placesLoaded = true;
 
-  const { restaurants, error } = await loadPlacesData(state.placesService, loc);
+  const { restaurants, error } = await loadPlacesDataWithTimeout(state.placesService, loc);
 
   if (error) {
     onError(error.message);
     return;
   }
 
+  state.placesLoaded = true;
   state.placesData = restaurants;
 
   const topPlaces = state.placesData.slice(0, 20);

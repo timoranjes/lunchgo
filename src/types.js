@@ -165,6 +165,7 @@
  * @property {string} searchQuery - Current text search input
  * @property {'list'|'map'} currentView - Active view mode
  * @property {string} activeCuisine - Selected cuisine filter ID, 'all' for none
+ * @property {string} activePrice - Selected price filter ID, 'all' for none
  * @property {Object|null} map - Google Maps instance
  * @property {Object[]} markers - Google Maps Marker instances
  * @property {Object|null} placesService - Google PlacesService instance

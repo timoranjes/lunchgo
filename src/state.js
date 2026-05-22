@@ -18,6 +18,7 @@
  * @property {string} searchQuery - Current text search input
  * @property {'list'|'map'} currentView - Active view: 'list' | 'map'
  * @property {string} activeCuisine - Selected cuisine filter ID, 'all' for none
+ * @property {string} activePrice - Selected price filter ID, 'all' means no filter
  * @property {object|null} map - Google Maps instance
  * @property {object[]} markers - Array of Google Maps Marker instances
  * @property {object|null} placesService - Google Maps PlacesService instance
@@ -41,6 +42,7 @@ const _state = {
   searchQuery: '',
   currentView: 'list',
   activeCuisine: 'all',
+  activePrice: 'all',
   map: null,
   markers: [],
   placesService: null,
@@ -160,6 +162,7 @@ function reset(overrides = {}) {
     searchQuery: '',
     currentView: 'list',
     activeCuisine: 'all',
+    activePrice: 'all',
     map: null,
     markers: [],
     placesService: null,

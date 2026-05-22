@@ -28,6 +28,7 @@ import {
   renderSkeletonCards,
   teardownLazyLoading,
 } from './render.js';
+import { loadNearbyDistricts, mergeRestaurants } from './local-data.js';
 
 const GOOGLE_MAPS_API_KEY = 'AIzaSyBN_pMA5dYGC70sS4OnoYALDszrTUUpjkM';
 
@@ -46,14 +47,35 @@ setRenderCallbacks({
   onHideFavoritesPage: () => hideFavoritesPage(),
 });
 
+/**
+ * Load nearby restaurants from Google Places API.
+ * Returns loaded restaurants; empty array on failure.
+ * @param {{ lat: number, lng: number }} loc
+ * @returns {Promise<import('./types.js').Restaurant[]>}
+ */
 async function loadPlacesData(loc) {
-  if (!state.placesService || state.placesLoaded) return;
-  await loadPlacesDataLegacy(state, loc, () => {
-    updateDisplay();
-  }, (errorMsg) => {
-    console.error('[LunchGo] Places nearbySearch failed:', errorMsg);
-    showErrorBanner(errorMsg);
+  if (!state.placesService || state.placesLoaded) return [];
+
+  const { loadPlacesDataWithTimeout } = await import('./api.js');
+  const { restaurants, error } = await loadPlacesDataWithTimeout(
+    state.placesService,
+    loc
+  );
+
+  if (error) {
+    console.error('[LunchGo] Places nearbySearch failed:', error.message);
+    return [];
+  }
+
+  const topPlaces = restaurants.slice(0, 20);
+  await new Promise((resolve) => {
+    fetchPhotosForTopRestaurantsLegacy(topPlaces, { placesService: state.placesService }, () => {
+      resolve();
+    });
   });
+
+  state.placesLoaded = true;
+  return restaurants;
 }
 
 /**
@@ -124,7 +146,19 @@ async function loadRestaurants() {
   state.placesLoaded = false;
   teardownLazyLoading();
 
-  await loadPlacesData(loc);
+  try {
+    const localData = await loadNearbyDistricts({ lat: loc.lat, lng: loc.lng });
+    state.placesData = localData;
+    updateDisplay();
+  } catch (err) {
+    console.warn('[LunchGo] Local data load failed, continuing with Places only:', err.message);
+  }
+
+  const placesData = await loadPlacesData(loc);
+  if (placesData.length > 0) {
+    state.placesData = mergeRestaurants(state.placesData, placesData);
+  }
+  updateDisplay();
 }
 
 const mapTypes = {
@@ -167,7 +201,6 @@ function initMap() {
     zIndex: 1000,
   });
 
-  state.placesService = new google.maps.places.PlacesService(state.map);
   renderMapMarkers(state.filtered || state.placesData);
 }
 
@@ -264,6 +297,7 @@ function setView(view) {
     document.querySelector('.header').style.display = '';
     document.querySelector('.toolbar').style.display = '';
     document.querySelector('.cuisine-bar').style.display = '';
+    document.querySelector('.price-bar').style.display = '';
     document.getElementById('discovery-section').style.display =
       state.filtered.filter(r => r.rating && r.rating > 0).length > 0 ? '' : 'none';
   } else {
@@ -272,6 +306,7 @@ function setView(view) {
     document.querySelector('.header').style.display = '';
     document.querySelector('.toolbar').style.display = '';
     document.querySelector('.cuisine-bar').style.display = '';
+    document.querySelector('.price-bar').style.display = '';
     document.getElementById('discovery-section').style.display = 'none';
     initMap();
     setTimeout(() => {
@@ -293,6 +328,30 @@ function renderCuisineBar() {
     chip.addEventListener('click', () => {
       state.activeCuisine = chip.dataset.cuisine;
       bar.querySelectorAll('.cuisine-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      updateDisplay();
+    });
+  });
+}
+
+const PRICE_LEVELS = [
+  { id: 'all', label: '全部' },
+  { id: '1', label: '$' },
+  { id: '2', label: '$$' },
+  { id: '3', label: '$$$' },
+  { id: '4', label: '$$$$' },
+];
+
+function renderPriceBar() {
+  const bar = document.getElementById('price-bar');
+  bar.innerHTML = PRICE_LEVELS.map(p =>
+    '<button class="price-chip' + (state.activePrice === p.id ? ' active' : '') + '" data-price="' + p.id + '">' + p.label + '</button>'
+  ).join('');
+
+  bar.querySelectorAll('.price-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      state.activePrice = chip.dataset.price;
+      bar.querySelectorAll('.price-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       updateDisplay();
     });
@@ -321,6 +380,11 @@ function init() {
   state.currentLocationLabel = loc.label;
 
   state.geocoder = new google.maps.Geocoder();
+
+  // Initialize PlacesService early so list view can load data without map being visible.
+  // PlacesService accepts any HTMLElement; we use a detached div to avoid needing a visible map.
+  state.placesService = new google.maps.places.PlacesService(document.createElement('div'));
+
   document.getElementById('loc-btn').textContent = loc.label;
 
   let searchTimer;
@@ -365,12 +429,58 @@ function init() {
   });
 
   document.getElementById('loc-btn').addEventListener('click', () => {
-    showLocationModal(DEFAULT_LOCATIONS, selectLocation);
+    showLocationModal(selectLocation);
   });
   document.getElementById('loc-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) hideLocationModal();
   });
   document.getElementById('gps-btn').addEventListener('click', useGPS);
+
+  const locSearchInput = document.getElementById('loc-search-input');
+  if (locSearchInput && typeof google !== 'undefined') {
+    const autocomplete = new google.maps.places.Autocomplete(locSearchInput, {
+      types: ['geocode'],
+      componentRestrictions: { country: 'hk' },
+    });
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace();
+      if (!place.geometry || !place.geometry.location) return;
+      const loc = {
+        id: place.place_id || 'search_' + Date.now(),
+        label: place.name || place.formatted_address || place.geometry.location.toString(),
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng(),
+      };
+      selectLocation(loc);
+    });
+  }
+
+  document.getElementById('map-pick-loc-btn').addEventListener('click', () => {
+    hideLocationModal();
+    setView('map');
+    showToast('點擊地圖選擇位置');
+
+    const pickListener = (e) => {
+      const loc = {
+        id: 'map_' + Date.now(),
+        label: e.latLng.toUrlValue(6),
+        lat: e.latLng.lat(),
+        lng: e.latLng.lng(),
+      };
+      if (state.geocoder) {
+        state.geocoder.geocode({ location: { lat: loc.lat, lng: loc.lng } }, (results, status) => {
+          if (status === 'OK' && results && results[0]) {
+            loc.label = results[0].formatted_address.split(',')[0].trim();
+          }
+          selectLocation(loc);
+        });
+      } else {
+        selectLocation(loc);
+      }
+      state.map.removeListener('click', pickListener);
+    };
+    state.map.addListener('click', pickListener);
+  });
 
   document.getElementById('add-custom-loc-btn').addEventListener('click', () => {
     hideLocationModal();
@@ -490,6 +600,7 @@ function init() {
   });
 
   renderCuisineBar();
+  renderPriceBar();
 
   document.getElementById('random-pick-btn').addEventListener('click', openRandomPick);
   document.getElementById('random-close').addEventListener('click', closeRandomPick);

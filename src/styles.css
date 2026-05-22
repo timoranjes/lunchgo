@@ -100,9 +100,24 @@
     }
     .cuisine-chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 
+    /* -- Price Filter -- */
+    .price-bar {
+      display: flex; gap: 6px; padding: 6px 16px; overflow-x: auto;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+      background: var(--card); border-bottom: 1px solid var(--border);
+    }
+    .price-bar::-webkit-scrollbar { display: none; }
+    .price-chip {
+      flex-shrink: 0; padding: 4px 10px; border-radius: 14px;
+      font-size: 11px; border: 1px solid var(--border); background: var(--bg);
+      color: var(--text-secondary); cursor: pointer; white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .price-chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
     /* -- View Toggle -- */
     .view-toggle {
-      position: fixed; bottom: 20px; right: 20px; z-index: 999;
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999;
       display: flex; background: var(--card); border-radius: 24px;
       box-shadow: var(--shadow-lg); overflow: hidden; border: 1px solid var(--border);
     }
@@ -170,7 +185,7 @@
     #map-view.active { display: block; }
     #map { width: 100%; height: 100%; }
     .map-tile-toggle {
-      position: absolute; top: 10px; right: 10px; z-index: 1001;
+      position: absolute; top: 10px; left: 10px; z-index: 1001;
       background: var(--card); border-radius: 8px; box-shadow: var(--shadow-lg);
       padding: 4px; display: flex; gap: 2px;
     }
@@ -265,6 +280,29 @@
       width: 100%; max-height: 70vh; overflow-y: auto; padding: 20px 16px 32px;
     }
     .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+    .loc-search-bar {
+      position: relative; margin-bottom: 12px;
+    }
+    .loc-search-bar input {
+      width: 100%; padding: 10px 12px 10px 36px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 14px; background: var(--bg);
+      outline: none; transition: border-color 0.2s;
+    }
+    .loc-search-bar input:focus { border-color: var(--brand); }
+    .loc-search-bar::before {
+      content: ""; position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      width: 14px; height: 14px; border: 2px solid var(--text-muted); border-radius: 50%;
+    }
+    .loc-search-bar::after {
+      content: ""; position: absolute; left: 22px; top: 50%; transform: translateY(-50%) rotate(-45deg);
+      width: 6px; height: 2px; background: var(--text-muted);
+    }
+    .loc-search-results {
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: var(--card); border-radius: 8px;
+      box-shadow: var(--shadow-lg); z-index: 10;
+      max-height: 200px; overflow-y: auto;
+    }
     .loc-item {
       padding: 12px; border-radius: 8px; margin-bottom: 6px; cursor: pointer;
       display: flex; justify-content: space-between; align-items: center;
