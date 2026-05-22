@@ -80,3 +80,21 @@
 - `npx tsc --noEmit` passes with zero errors
 - `@type` inline casts required for Google Maps SDK callback params (no TypeScript definitions)
 - `PlacesResult_` typedef needed for `withRetry` generic return type inference
+
+## Task 15: Python Data Pipeline Modernization (2026-05-22)
+- `scripts/enrich_data.py` modernized: 503 → 604 lines (net +101 from new helpers, -100 from removed docstrings)
+- Added `from __future__ import annotations` for forward reference type hints
+- All 10 public functions have type hints (parameters + return types)
+- Type aliases defined: `FehdRecord`, `OsmElement`, `ParsedOsmPlace`, `MergedRestaurant`
+- Replaced `urllib.request` with `requests` library (already installed system-wide v2.32.5)
+- Created `requirements.txt` with `requests>=2.28.0`
+- Added `_retry_with_backoff()` helper with exponential backoff (2s → 4s → 8s, max 60s, 3 retries)
+- Added `_http_get()` and `_http_post()` wrappers with standard headers and `raise_for_status()`
+- Replaced all `print()` calls with `logging` module (`logger.info`, `logger.warning`, `logger.error`)
+- Added `_setup_logging()` with `--verbose`/`-v` CLI flag support
+- FIELDS array order preserved exactly — compact JSON output format unchanged
+- FEHD XML parsing logic unchanged (same `ET.fromstring`, same tag extraction)
+- Overpass query structure unchanged (same endpoints, same query string)
+- All 11 existing tests pass without modification
+- Module docstring preserved (existed in original)
+- Section divider comments preserved (existed in original as organizational markers)

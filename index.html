@@ -176,31 +176,36 @@
 
   <script type="module">
     import Store from './src/store.js';
+    import { state } from './src/state.js';
     import { haversine, formatDist, renderStars, priceLevel, escHtml, escAttr, matchCuisine } from './src/utils.js';
     import { loadPlacesDataLegacy, fetchPlaceDetailsLegacy, fetchPhotosForTopRestaurantsLegacy } from './src/api.js';
+    import {
+      updateDisplay,
+      renderDiscovery,
+      renderList,
+      renderMapMarkers,
+      showDetail,
+      openRandomPick,
+      closeRandomPick,
+      rerollRandom,
+      showRandomResult,
+      renderFavorites,
+      showFavoritesPage,
+      hideFavoritesPage,
+      showLocationModal,
+      hideLocationModal,
+      setRenderCallbacks,
+      loadMoreRestaurants,
+      setupLazyLoading,
+      teardownLazyLoading,
+      setFavSortMode,
+      CUISINES as RENDER_CUISINES,
+    } from './src/render.js';
 
     // -- Config --
     const GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY_HERE';
-    // Google Places only - no local district data needed
 
-    // Expanded cuisine filter options
-    const CUISINES = [
-      { id: 'all', label: '全部' },
-      { id: 'chinese', label: '中式' },
-      { id: 'noodle', label: '粉麵' },
-      { id: 'mixian', label: '米線' },
-      { id: 'japanese', label: '日式' },
-      { id: 'western', label: '西式' },
-      { id: 'fast_food', label: '快餐' },
-      { id: 'cafe', label: '咖啡' },
-      { id: 'seafood', label: '海鮮' },
-      { id: 'korean', label: '韓式' },
-      { id: 'thai', label: '泰式' },
-      { id: 'italian', label: '意式' },
-      { id: 'bbq', label: '燒烤' },
-      { id: 'hotpot', label: '火鍋' },
-      { id: 'dessert', label: '甜品' },
-    ];
+    // Cuisine options (imported from render.js as RENDER_CUISINES)
 
     // Default HK locations
     const DEFAULT_LOCATIONS = [
@@ -211,32 +216,16 @@
       { id: 'quarry_bay', label: '鰂魚涌', lat: 22.2855, lng: 114.2158 },
     ];
 
-    // -- State --
-    const state = {
-      placesData: [],
-      filtered: [],
-      currentLocation: null,
-      currentLocationLabel: '',
-      currentSort: 'distance',
-      searchQuery: '',
-      currentView: 'list',
-      activeCuisine: 'all',
-      map: null,
-      markers: [],
-      placesService: null,
-      placesLoaded: false,
-      geocoder: null,
-      autocomplete: null,
-      // Random pick state
-      randomPickResult: null,
-      // Discovery state
-      discoveryVisible: false,
-      // Load-more pagination state
-      loadMoreIndex: 0,
-      loadMoreStep: 50,
-      // Loading errors
-      loadingErrors: [],
-    };
+    // -- State -- (imported from src/state.js)
+
+    // -- Render Callbacks --
+    // Wire up interactivity callbacks for the render module
+    setRenderCallbacks({
+      onCardClick: (id) => showDetail(id),
+      onShowToast: (msg) => showToast(msg),
+      onFetchPlaceDetails: (placeId, callback) => fetchPlaceDetails(placeId, callback),
+      onHideFavoritesPage: () => hideFavoritesPage(),
+    });
 
     // -- Storage -- (imported from src/store.js)
     // -- Utils -- (imported from src/utils.js)
@@ -295,390 +284,18 @@
       await loadPlacesData(loc);
     }
 
-    function updateDisplay(reset) {
-      if (reset === undefined) reset = true;
-
-      let list = state.placesData;
-
-      // Filter by search
-      if (state.searchQuery) {
-        const q = state.searchQuery.toLowerCase();
-        list = list.filter(r =>
-          (r.name && r.name.toLowerCase().includes(q)) ||
-          (r.name_en && r.name_en.toLowerCase().includes(q)) ||
-          (r.address && r.address.toLowerCase().includes(q)) ||
-          (r.cuisine && r.cuisine.toLowerCase().includes(q))
-        );
-      }
-
-      // Filter by cuisine
-      if (state.activeCuisine !== 'all') {
-        list = list.filter(r => matchCuisine(r, state.activeCuisine));
-      }
-
-      // Add distance
-      const loc = state.currentLocation;
-      if (loc) {
-        list = list.map(r => ({
-          ...r,
-          distance: haversine(loc.lat, loc.lng, parseFloat(r.lat), parseFloat(r.lng))
-        }));
-      }
-
-      // Sort
-      switch (state.currentSort) {
-        case 'distance': list.sort((a, b) => (a.distance || 0) - (b.distance || 0)); break;
-        case 'rating': list.sort((a, b) => (b.rating || 0) - (a.rating || 0)); break;
-        case 'name': list.sort((a, b) => (a.name || '').localeCompare(b.name || '')); break;
-      }
-
-      state.filtered = list;
-
-      // Update count
-      const total = list.length;
-      document.getElementById('result-count').textContent = total + ' 家餐廳';
-
-      // Render
-      if (reset) {
-        state.loadMoreIndex = 0;
-      }
-      renderDiscovery(list);
-      renderList(list);
-      if (state.map) renderMapMarkers(list);
-
-      // Hide loading
-      document.getElementById('loading-state').style.display = 'none';
-      if (list.length === 0 && total > 0) {
-        document.getElementById('empty-state').style.display = 'block';
-      } else {
-        document.getElementById('empty-state').style.display = 'none';
-      }
-    }
-
     // -- Discovery / Recommendations --
-    function renderDiscovery(list) {
-      const section = document.getElementById('discovery-section');
-      const scroll = document.getElementById('discovery-scroll');
-      const subtitle = document.getElementById('discovery-subtitle');
+    // (moved to src/render.js)
 
-      // Only show rated restaurants
-      const rated = list.filter(r => r.rating && r.rating > 0);
-
-      if (rated.length === 0) {
-        section.style.display = 'none';
-        return;
-      }
-
-      section.style.display = '';
-
-      // Sort by rating, then by review count
-      const sorted = [...rated].sort((a, b) => {
-        if (b.rating !== a.rating) return b.rating - a.rating;
-        return (b.user_ratings_total || 0) - (a.user_ratings_total || 0);
-      });
-
-      // Take top 20
-      const top = sorted.slice(0, 20);
-
-      // Determine subtitle based on filter state
-      if (state.activeCuisine !== 'all') {
-        const cuisineLabel = CUISINES.find(c => c.id === state.activeCuisine);
-        subtitle.textContent = (cuisineLabel ? cuisineLabel.label : '') + '高分餐廳';
-      } else {
-        subtitle.textContent = '評分 ' + top[0].rating.toFixed(1) + ' 起';
-      }
-
-      scroll.innerHTML = top.map(r => {
-        const dist = r.distance ? formatDist(r.distance) : '';
-        let imgHtml = '';
-        if (r.photos && r.photos.length > 0) {
-          imgHtml = '<img src="' + r.photos[0] + '" alt="" loading="lazy" />';
-        }
-
-        return '<div class="discovery-card" data-id="' + escAttr(r.id) + '">' +
-          '<div class="discovery-card-img">' + imgHtml + '</div>' +
-          '<div class="discovery-card-body">' +
-            '<div class="discovery-card-name">' + escHtml(r.name || '') + '</div>' +
-            '<div class="discovery-card-meta">' +
-              (dist ? dist + ' · ' : '') +
-              (r.price_level ? priceLevel(r.price_level) : '') +
-            '</div>' +
-            '<div class="discovery-card-rating">' +
-              '<span class="stars">' + renderStars(r.rating) + '</span>' +
-              '<span class="rating-num">' + r.rating + '</span>' +
-              (r.user_ratings_total ? '<span class="rating-count">(' + r.user_ratings_total + ')</span>' : '') +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      }).join('');
-
-      scroll.querySelectorAll('.discovery-card').forEach(card => {
-        card.addEventListener('click', () => showDetail(card.dataset.id));
-      });
-    }
-
-    function renderList(list) {
-      const container = document.getElementById('rest-list');
-      const loadMoreEl = document.getElementById('load-more');
-      const loadMoreBtn = document.getElementById('load-more-btn');
-
-      if (list.length === 0) {
-        container.innerHTML = '';
-        loadMoreEl.style.display = 'none';
-        return;
-      }
-
-      // Calculate how many to show
-      const end = Math.min(state.loadMoreIndex + state.loadMoreStep, list.length);
-      const display = list.slice(0, end);
-      state.loadMoreIndex = end;
-
-      container.innerHTML = display.map(r => {
-        const dist = r.distance ? formatDist(r.distance) : '';
-        const district = r.district_tc || r.district || '';
-        const stars = r.rating ? renderStars(r.rating) : '';
-        const price = r.price_level ? priceLevel(r.price_level) : '';
-
-        let thumbHtml = '<div class="rest-card-thumb">';
-        if (r.photos && r.photos.length > 0) {
-          thumbHtml += '<img src="' + r.photos[0] + '" alt="" loading="lazy" onerror="this.style.display='none'" />';
-        } else {
-          thumbHtml += '';
-          // No emoji - use CSS icon instead
-        }
-        thumbHtml += '</div>';
-
-        let tags = '';
-        if (district) tags += '<span class="tag tag-district">' + escHtml(district) + '</span>';
-        if (dist) tags += '<span class="tag tag-distance">' + dist + '</span>';
-        if (r.cuisine) tags += '<span class="tag tag-cuisine">' + escHtml(r.cuisine.split(',')[0]) + '</span>';
-        if (price) tags += '<span class="tag tag-price">' + escHtml(price.trim()) + '</span>';
-
-        return '<div class="rest-card" data-id="' + escAttr(r.id) + '">' +
-          '<div class="rest-card-top">' +
-            thumbHtml +
-            '<div class="rest-card-body">' +
-              '<div class="rest-name">' + escHtml(r.name || '') + '</div>' +
-              (r.name_en && r.name_en !== r.name ? '<div class="rest-name-en">' + escHtml(r.name_en) + '</div>' : '') +
-              (stars ? '<div class="rest-rating">' +
-                '<span class="stars">' + stars + '</span>' +
-                '<span class="rating-num">' + r.rating + '</span>' +
-                (r.user_ratings_total ? '<span class="rating-count">(' + r.user_ratings_total + ')</span>' : '') +
-              '</div>' : '') +
-              '<div class="rest-info">' +
-                (dist ? '<span class="rest-info-item">' + dist + '</span>' : '') +
-                (price ? '<span class="rest-info-item">' + price + '</span>' : '') +
-              '</div>' +
-              '<div class="rest-tags">' + tags + '</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      }).join('');
-
-      container.querySelectorAll('.rest-card').forEach(card => {
-        card.addEventListener('click', () => showDetail(card.dataset.id));
-      });
-
-      // Show load more button
-      if (end < list.length) {
-        loadMoreBtn.textContent = '載入更多 (' + (list.length - end) + ' 家)';
-        loadMoreEl.style.display = 'block';
-      } else {
-        loadMoreEl.style.display = 'none';
-      }
-    }
+    // -- List Rendering --
+    // (moved to src/render.js)
 
     // -- Favorites Page --
-    let favSortMode = 'recent';
-
-    function showFavoritesPage() {
-      document.getElementById('fav-page').classList.add('active');
-      document.getElementById('view-toggle').style.display = 'none';
-      document.getElementById('random-pick-btn').style.display = 'none';
-      renderFavorites();
-    }
-
-    function hideFavoritesPage() {
-      document.getElementById('fav-page').classList.remove('active');
-      document.getElementById('view-toggle').style.display = '';
-      document.getElementById('random-pick-btn').style.display = '';
-    }
-
-    function renderFavorites() {
-      const favIds = Store.getFavorites();
-      const container = document.getElementById('fav-list');
-      const emptyEl = document.getElementById('fav-empty');
-
-      if (favIds.length === 0) {
-        container.innerHTML = '';
-        emptyEl.style.display = 'block';
-        return;
-      }
-      emptyEl.style.display = 'none';
-
-      // Get favorite restaurants from Places data
-      let favs = favIds.map(id => state.placesData.find(r => r.id === id)).filter(Boolean);
-
-      // Sort
-      switch (favSortMode) {
-        case 'name': favs.sort((a, b) => (a.name || '').localeCompare(b.name || '')); break;
-        case 'distance':
-          if (state.currentLocation) {
-            favs = favs.map(r => ({
-              ...r,
-              _favDist: haversine(state.currentLocation.lat, state.currentLocation.lng, parseFloat(r.lat), parseFloat(r.lng))
-            }));
-            favs.sort((a, b) => (a._favDist || Infinity) - (b._favDist || Infinity));
-          }
-          break;
-        case 'recent':
-        default:
-          favs.reverse();
-          break;
-      }
-
-      container.innerHTML = favs.map(r => {
-        const dist = state.currentLocation ? formatDist(haversine(state.currentLocation.lat, state.currentLocation.lng, parseFloat(r.lat), parseFloat(r.lng))) : '';
-        const district = r.district_tc || r.district || '';
-        const stars = r.rating ? renderStars(r.rating) : '';
-        const price = r.price_level ? priceLevel(r.price_level) : '';
-
-        let thumbHtml = '<div class="rest-card-thumb">';
-        if (r.photos && r.photos.length > 0) {
-          thumbHtml += '<img src="' + r.photos[0] + '" alt="" loading="lazy" onerror="this.style.display='none'" />';
-        } else {
-          thumbHtml += '';
-          // No emoji - use CSS icon instead
-        }
-        thumbHtml += '</div>';
-
-        let tags = '';
-        if (district) tags += '<span class="tag tag-district">' + escHtml(district) + '</span>';
-        if (dist) tags += '<span class="tag tag-distance">' + dist + '</span>';
-        if (r.cuisine) tags += '<span class="tag tag-cuisine">' + escHtml(r.cuisine.split(',')[0]) + '</span>';
-
-        return '<div class="rest-card" data-id="' + escAttr(r.id) + '">' +
-          '<div class="rest-card-top">' +
-            thumbHtml +
-            '<div class="rest-card-body">' +
-              '<div class="rest-name">' + escHtml(r.name || '') + '</div>' +
-              (r.name_en && r.name_en !== r.name ? '<div class="rest-name-en">' + escHtml(r.name_en) + '</div>' : '') +
-              (stars ? '<div class="rest-rating">' +
-                '<span class="stars">' + stars + '</span>' +
-                '<span class="rating-num">' + r.rating + '</span>' +
-                (r.user_ratings_total ? '<span class="rating-count">(' + r.user_ratings_total + ')</span>' : '') +
-              '</div>' : '') +
-              '<div class="rest-info">' +
-                (dist ? '<span class="rest-info-item">' + dist + '</span>' : '') +
-                (price ? '<span class="rest-info-item">' + price + '</span>' : '') +
-              '</div>' +
-              '<div class="rest-tags">' + tags + '</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      }).join('');
-
-      container.querySelectorAll('.rest-card').forEach(card => {
-        card.addEventListener('click', () => {
-          hideFavoritesPage();
-          showDetail(card.dataset.id);
-        });
-      });
-    }
+    // (moved to src/render.js)
+    // Note: favSortMode is managed via setFavSortMode() from render.js
 
     // -- Random Pick --
-    function openRandomPick() {
-      const overlay = document.getElementById('random-overlay');
-      const body = document.getElementById('random-body');
-      const footer = document.getElementById('random-footer');
-
-      // Get eligible restaurants from filtered list
-      const candidates = state.filtered.length > 0 ? state.filtered : state.placesData;
-
-      if (candidates.length === 0) {
-        showToast('暫無餐廳可選');
-        return;
-      }
-
-      overlay.classList.add('active');
-      footer.style.display = 'none';
-
-      // Rolling animation
-      let rollCount = 0;
-      const maxRolls = 20;
-      const rollInterval = setInterval(() => {
-        const randomIdx = Math.floor(Math.random() * candidates.length);
-        const r = candidates[randomIdx];
-        document.getElementById('random-rolling-name').textContent = r.name || '未知餐廳';
-        rollCount++;
-
-        if (rollCount >= maxRolls) {
-          clearInterval(rollInterval);
-          showRandomResult(candidates);
-        }
-      }, 80);
-    }
-
-    function showRandomResult(candidates) {
-      const idx = Math.floor(Math.random() * candidates.length);
-      const r = candidates[idx];
-      state.randomPickResult = r;
-
-      const body = document.getElementById('random-body');
-      const footer = document.getElementById('random-footer');
-      const subtitle = document.getElementById('random-subtitle');
-
-      const dist = r.distance ? formatDist(r.distance) : '';
-      const district = r.district_tc || r.district || '';
-      const detailParts = [];
-      if (district) detailParts.push(district);
-      if (dist) detailParts.push(dist);
-      if (r.price_level) detailParts.push(priceLevel(r.price_level));
-
-      body.style.display = 'none';
-      footer.style.display = '';
-      subtitle.textContent = '找到了！';
-
-      document.getElementById('random-result-name').textContent = r.name || '未知餐廳';
-      document.getElementById('random-result-detail').textContent = detailParts.join(' · ') || '';
-      document.getElementById('random-result-rating').innerHTML = r.rating ?
-        '<span class="stars" style="color:var(--star);font-size:14px;">' + renderStars(r.rating) + '</span>' +
-        ' <span style="font-weight:600;">' + r.rating + '</span>' +
-        (r.user_ratings_total ? ' <span style="color:var(--text-muted);font-size:12px;">(' + r.user_ratings_total + ' 則)</span>' : '')
-        : '<span style="color:var(--text-muted);">暫無評分</span>';
-    }
-
-    function closeRandomPick() {
-      document.getElementById('random-overlay').classList.remove('active');
-      state.randomPickResult = null;
-    }
-
-    function rerollRandom() {
-      const candidates = state.filtered.length > 0 ? state.filtered : state.placesData;
-
-      if (candidates.length === 0) return;
-
-      const body = document.getElementById('random-body');
-      const footer = document.getElementById('random-footer');
-
-      body.style.display = '';
-      footer.style.display = 'none';
-      document.getElementById('random-subtitle').textContent = '再選一次...';
-
-      let rollCount = 0;
-      const maxRolls = 15;
-      const rollInterval = setInterval(() => {
-        const randomIdx = Math.floor(Math.random() * candidates.length);
-        const r = candidates[randomIdx];
-        document.getElementById('random-rolling-name').textContent = r.name || '未知餐廳';
-        rollCount++;
-
-        if (rollCount >= maxRolls) {
-          clearInterval(rollInterval);
-          showRandomResult(candidates);
-        }
-      }, 70);
-    }
+    // (moved to src/render.js)
 
     // -- Google Map --
     const mapTypes = {
@@ -732,225 +349,19 @@
       state.map.setMapTypeId(mapTypes[name]);
       currentMapType = name;
 
-      // Update toggle buttons
       document.querySelectorAll('#map-tile-toggle button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tile === name);
       });
     }
 
-    function renderMapMarkers(list) {
-      if (!state.map) return;
-
-      // Clear old markers
-      state.markers.forEach(m => m.setMap(null));
-      state.markers = [];
-
-      const bounds = state.map.getBounds();
-      const visible = list.filter(r => {
-        if (!r.lat || !r.lng) return false;
-        return bounds.contains({ lat: parseFloat(r.lat), lng: parseFloat(r.lng) });
-      });
-
-      const display = visible.slice(0, 500);
-      display.forEach(r => {
-        const marker = new google.maps.Marker({
-          position: { lat: parseFloat(r.lat), lng: parseFloat(r.lng) },
-          map: state.map,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 6,
-            fillColor: r.rating >= 4 ? '#07C160' : r.rating >= 3 ? '#F39C12' : '#E74C3C',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2,
-          },
-        });
-        marker.addListener('click', () => showDetail(r.id));
-        state.markers.push(marker);
-      });
-    }
+    // -- Map Markers --
+    // (moved to src/render.js)
 
     // -- Detail View --
-    function showDetail(id) {
-      const r = state.placesData.find(x => x.id === id);
-      if (!r) return;
-
-      // Close random pick if open
-      closeRandomPick();
-
-      const loc = state.currentLocation;
-      const dist = loc ? formatDist(haversine(loc.lat, loc.lng, parseFloat(r.lat), parseFloat(r.lng))) : '';
-      const isFav = Store.isFav(r.id);
-
-      // Update fav button
-      const favBtn = document.getElementById('detail-fav');
-      favBtn.textContent = isFav ? '\u2665' : '\u2661';
-      favBtn.className = 'detail-fav' + (isFav ? ' is-fav' : '');
-
-      // For Places data, fetch details on demand
-      let photosHtml = '';
-      if (r.photos && r.photos.length > 0) {
-        photosHtml = '<div class="detail-photos">' +
-          r.photos.map(p => '<img class="detail-photo" src="' + p + '" alt="" />').join('') +
-        '</div>';
-      }
-
-      const content = document.getElementById('detail-content');
-      content.innerHTML =
-        '<div class="detail-hero">' +
-          '<div class="detail-name">' + escHtml(r.name || '') + '</div>' +
-          (r.name_en && r.name_en !== r.name ? '<div class="detail-name-en">' + escHtml(r.name_en) + '</div>' : '') +
-          (r.rating ? '<div class="detail-rating-row">' +
-            '<span class="detail-stars">' + renderStars(r.rating) + '</span>' +
-            '<span class="detail-rating-score">' + r.rating + '</span>' +
-            (r.user_ratings_total ? '<span class="detail-rating-count">(' + r.user_ratings_total + ' 則評價)</span>' : '') +
-          '</div>' : '') +
-          '<div class="detail-meta">' +
-            (dist ? '<span class="detail-meta-item">' + dist + '</span>' : '') +
-            (r.price_level ? '<span class="detail-meta-item">' + priceLevel(r.price_level) + '</span>' : '') +
-            (r.district_tc || r.district ? '<span class="detail-meta-item">' + (r.district_tc || r.district) + '</span>' : '') +
-          '</div>' +
-        '</div>' +
-        photosHtml +
-        '<div class="detail-section">' +
-          '<div class="detail-section-title">地址</div>' +
-          '<div class="detail-address">' + escHtml(r.address || '暫無地址資料') + '</div>' +
-        '</div>' +
-
-        (r.place_id ? '<div class="detail-section" id="detail-hours-section">' +
-          '<div class="detail-section-title">營業時間</div>' +
-          '<div class="loading" style="padding:16px;"><div class="loading-spinner"></div></div>' +
-        '</div>' : '') +
-        '<div class="detail-section">' +
-          '<div class="detail-section-title">位置</div>' +
-          '<div class="detail-map" id="detail-map"></div>' +
-        '</div>' +
-        '<div class="detail-actions">' +
-          '<button class="action-btn action-btn-secondary" onclick="window.open(\'https://maps.google.com/?q=' + encodeURIComponent(r.name || '') + '&query=' + r.lat + ',' + r.lng + '\', \'_blank\')">Google 地圖</button>' +
-          '<button class="action-btn action-btn-primary" onclick="window.open(\'https://www.google.com/maps/dir/?api=1&destination=' + r.lat + ',' + r.lng + '\', \'_blank\')">導航</button>' +
-        '</div>';
-
-      document.getElementById('detail-view').classList.add('active');
-
-      // Fetch opening hours for Places data
-      if (r.place_id) {
-        fetchPlaceDetails(r.place_id, (details) => {
-          if (!details) return;
-          const section = document.getElementById('detail-hours-section');
-          if (!section) return;
-          let hoursHtml = '<div class="detail-section-title">營業時間</div>';
-          if (details.opening_hours) {
-            const isOpen = details.opening_hours.isOpen();
-            hoursHtml += '<div class="detail-hours">' +
-              '<div class="detail-hours-row">' +
-                '<span class="' + (isOpen ? 'detail-hours-open' : 'detail-hours-closed') + '">' + (isOpen ? '營業中' : '已歇業') + '</span>' +
-              '</div>' +
-              (details.opening_hours.weekday_text || []).map(w => {
-                const [day, time] = w.split(': ');
-                return '<div class="detail-hours-row">' +
-                  '<span class="detail-hours-day">' + day + '</span>' +
-                  '<span class="detail-hours-time">' + time + '</span>' +
-                '</div>';
-              }).join('') +
-            '</div>';
-          } else {
-            hoursHtml += '<div style="color:var(--text-muted);font-size:13px;">暫無營業時間資料</div>';
-          }
-          if (details.formatted_phone_number) {
-            hoursHtml += '<div style="margin-top:12px;"><span style="font-weight:500;">電話: </span>' + details.formatted_phone_number + '</div>';
-          }
-          if (details.website) {
-            hoursHtml += '<div style="margin-top:4px;"><span style="font-weight:500;">網站: </span><a href="' + details.website + '" target="_blank" style="color:var(--brand);">前往網站</a></div>';
-          }
-          section.innerHTML = hoursHtml;
-        });
-      }
-
-      // Mini map
-      setTimeout(() => {
-        const mapEl = document.getElementById('detail-map');
-        if (mapEl && !mapEl.dataset.init) {
-          mapEl.dataset.init = '1';
-          const miniMap = new google.maps.Map(mapEl, {
-            zoomControl: false,
-            streetViewControl: false,
-            fullscreenControl: false,
-            mapTypeControl: false,
-          });
-          miniMap.setCenter({ lat: parseFloat(r.lat), lng: parseFloat(r.lng) });
-          miniMap.setZoom(16);
-          new google.maps.Marker({
-            position: { lat: parseFloat(r.lat), lng: parseFloat(r.lng) },
-            map: miniMap,
-          });
-        }
-      }, 100);
-    }
+    // (moved to src/render.js)
 
     // -- Location Modal --
-    function showLocationModal() {
-      const locs = [...DEFAULT_LOCATIONS];
-      const customLocs = Store.getCustomLocations();
-
-      // Render default locations
-      const container = document.getElementById('loc-list');
-      container.innerHTML = locs.map(l => {
-        const isCurrent = state.currentLocation && state.currentLocation.id === l.id;
-        return '<div class="loc-item" data-loc-id="' + l.id + '">' +
-          '<div>' +
-            '<div class="loc-item-name">' + l.label + '</div>' +
-          '</div>' +
-          (isCurrent ? '<span style="color:var(--brand);">目前</span>' : '') +
-        '</div>';
-      }).join('');
-
-      container.querySelectorAll('.loc-item').forEach(item => {
-        item.addEventListener('click', () => {
-          const loc = locs.find(l => l.id === item.dataset.locId);
-          if (loc) selectLocation(loc);
-        });
-      });
-
-      // Render custom locations
-      const customContainer = document.getElementById('custom-loc-list');
-      if (customLocs.length === 0) {
-        customContainer.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:4px 0;">尚未新增自訂地點</div>';
-      } else {
-        customContainer.innerHTML = customLocs.map(cl => {
-          const isCurrent = state.currentLocation && state.currentLocation.id === cl.id;
-          return '<div class="loc-item" data-custom-id="' + cl.id + '">' +
-            '<div style="display:flex;align-items:center;flex:1;min-width:0;">' +
-              '<div style="margin-right:8px;width:8px;height:8px;border-radius:50%;background:var(--brand);flex-shrink:0;"></div>' +
-              '<div>' +
-                '<div class="loc-item-name">' + escHtml(cl.label) + '</div>' +
-              '</div>' +
-            '</div>' +
-            (isCurrent ? '<span style="color:var(--brand);">目前</span>' : '') +
-            '<button class="loc-item-delete" data-del-id="' + cl.id + '">×</button>' +
-          '</div>';
-        }).join('');
-
-        customContainer.querySelectorAll('.loc-item').forEach(item => {
-          item.addEventListener('click', (e) => {
-            if (e.target.classList.contains('loc-item-delete')) {
-              e.stopPropagation();
-              const delId = e.target.dataset.delId;
-              Store.removeCustomLocation(delId);
-              showLocationModal(); // Refresh
-              return;
-            }
-            const cl = customLocs.find(l => l.id === item.dataset.customId);
-            if (cl) selectLocation(cl);
-          });
-        });
-      }
-
-      document.getElementById('loc-modal').classList.add('active');
-    }
-
-    function hideLocationModal() {
-      document.getElementById('loc-modal').classList.remove('active');
-    }
+    // (moved to src/render.js)
 
     function selectLocation(loc) {
       Store.setLocation(loc);
@@ -1072,7 +483,7 @@
     // -- Cuisine bar --
     function renderCuisineBar() {
       const bar = document.getElementById('cuisine-bar');
-      bar.innerHTML = CUISINES.map(c =>
+      bar.innerHTML = RENDER_CUISINES.map(c =>
         '<button class="cuisine-chip' + (state.activeCuisine === c.id ? ' active' : '') + '" data-cuisine="' + c.id + '">' + c.label + '</button>'
       ).join('');
 
@@ -1259,7 +670,7 @@
         btn.addEventListener('click', () => {
           document.querySelectorAll('.fav-sort-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
-          favSortMode = btn.dataset.favSort;
+          setFavSortMode(btn.dataset.favSort);
           renderFavorites();
         });
       });

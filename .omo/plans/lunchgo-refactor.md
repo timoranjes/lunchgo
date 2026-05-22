@@ -850,7 +850,7 @@ Max Concurrent: 8 (Waves 1 & 2)
   - Files: `src/api.js`
   - Pre-commit: Schema equivalence test
 
-- [ ] 9. Rendering engine module
+- [x] 9. Rendering engine module
 
   **What to do**:
   - Extract rendering functions from index.html to `src/render.js`
@@ -937,7 +937,7 @@ Max Concurrent: 8 (Waves 1 & 2)
   - Files: `src/render.js`
   - Pre-commit: HTML equivalence test
 
-- [ ] 10. Map integration module
+- [x] 10. Map integration module
 
   **What to do**:
   - Extract Google Maps integration from index.html to `src/map.js`
@@ -1022,7 +1022,7 @@ Max Concurrent: 8 (Waves 1 & 2)
   - Files: `src/map.js`
   - Pre-commit: Map functionality test
 
-- [ ] 11. Detail view module
+- [x] 11. Detail view module
 
   **What to do**:
   - Extract detail view logic from index.html to `src/detail.js`
@@ -1109,7 +1109,7 @@ Max Concurrent: 8 (Waves 1 & 2)
   - Files: `src/detail.js`
   - Pre-commit: Detail view equivalence test
 
-- [ ] 12. Random picker module
+- [x] 12. Random picker module
 
   **What to do**:
   - Extract random picker logic from index.html to `src/random.js`
@@ -1193,7 +1193,7 @@ Max Concurrent: 8 (Waves 1 & 2)
   - Files: `src/random.js`
   - Pre-commit: Animation timing test
 
-- [ ] 13. Location management module
+- [x] 13. Location management module
 
   **What to do**:
   - Extract location management logic from index.html to `src/location.js`
@@ -1277,7 +1277,7 @@ Max Concurrent: 8 (Waves 1 & 2)
   - Files: `src/location.js`
   - Pre-commit: Location format compatibility test
 
-- [ ] 14. Event system module
+- [x] 14. Event system module
 
   **What to do**:
   - Extract event handling logic from index.html to `src/events.js`
@@ -1359,7 +1359,7 @@ Max Concurrent: 8 (Waves 1 & 2)
   - Files: `src/events.js`
   - Pre-commit: Interaction equivalence test
 
-- [ ] 15. Python data pipeline modernization
+- [x] 15. Python data pipeline modernization
 
   **What to do**:
   - Modernize `scripts/enrich_data.py` with type hints and proper error handling
