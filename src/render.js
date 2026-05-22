@@ -12,6 +12,9 @@
  * result sets > 50 restaurants. Falls back to "Load More" button
  * when IntersectionObserver is unavailable.
  *
+ * Performance: All list rendering uses DocumentFragment for batched
+ * DOM updates. Skeleton screens shown during initial load.
+ *
  * @module render
  */
 
@@ -94,6 +97,28 @@ export const CUISINES = [
 // ---------------------------------------------------------------------------
 // Template Functions
 // ---------------------------------------------------------------------------
+
+/**
+ * Generate skeleton card HTML for loading state.
+ *
+ * @param {number} count - Number of skeleton cards to generate
+ * @returns {string} HTML string
+ */
+export function renderSkeletonCards(count) {
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    html +=
+      '<div class="skeleton-card">' +
+      '<div class="skeleton-thumb"></div>' +
+      '<div class="skeleton-body">' +
+      '<div class="skeleton-line skeleton-line-medium"></div>' +
+      '<div class="skeleton-line skeleton-line-short"></div>' +
+      '<div class="skeleton-line"></div>' +
+      '</div>' +
+      '</div>';
+  }
+  return html;
+}
 
 /**
  * Generate HTML for a single restaurant card (list view).
@@ -350,7 +375,6 @@ export function updateDisplay(reset) {
     );
   }
 
-  // Filter by cuisine
   if (state.activeCuisine !== 'all') {
     list = list.filter((r) => matchCuisine(r, state.activeCuisine));
   }
@@ -391,9 +415,16 @@ export function updateDisplay(reset) {
   if (reset) {
     state.loadMoreIndex = 0;
   }
-  renderDiscovery(list);
-  renderList(list);
-  if (state.map) renderMapMarkers(list);
+
+  const scheduleRender = typeof requestIdleCallback === 'function'
+    ? requestIdleCallback
+    : requestAnimationFrame;
+
+  scheduleRender(() => {
+    renderDiscovery(list);
+    renderList(list);
+    if (state.map) renderMapMarkers(list);
+  });
 
   const loadingEl = document.getElementById('loading-state');
   if (loadingEl) loadingEl.style.display = 'none';
@@ -458,7 +489,8 @@ export function renderDiscovery(list) {
  *
  * For result sets > 50, uses IntersectionObserver for infinite scroll
  * with a "Load More" button fallback. Renders in batches of
- * state.loadMoreStep (default 50).
+ * state.loadMoreStep (default 50) using DocumentFragment for
+ * batched DOM updates.
  *
  * @param {import('./types.js').Restaurant[]} list - Filtered restaurant list
  */
@@ -479,15 +511,23 @@ export function renderList(list) {
   const display = list.slice(0, end);
   state.loadMoreIndex = end;
 
-  container.innerHTML = display.map(renderCardTemplate).join('');
-
-  container.querySelectorAll('.rest-card').forEach((card) => {
-    card.addEventListener('click', () => {
-      if (_callbacks.onCardClick) {
-        _callbacks.onCardClick(/** @type {HTMLElement} */ (card).dataset.id);
-      }
-    });
+  const fragment = document.createDocumentFragment();
+  const temp = document.createElement('div');
+  display.forEach((r) => {
+    temp.innerHTML = renderCardTemplate(r);
+    const card = temp.firstElementChild;
+    if (card) {
+      card.addEventListener('click', () => {
+        if (_callbacks.onCardClick) {
+          _callbacks.onCardClick(/** @type {HTMLElement} */ (card).dataset.id);
+        }
+      });
+      fragment.appendChild(card);
+    }
   });
+
+  container.innerHTML = '';
+  container.appendChild(fragment);
 
   if (loadMoreEl && loadMoreBtn) {
     if (end < list.length) {
@@ -1038,32 +1078,36 @@ export function renderFavorites() {
       break;
   }
 
-  container.innerHTML = favs
-    .map((r) => {
-      const dist = state.currentLocation
-        ? formatDist(
-            haversine(
-              state.currentLocation.lat,
-              state.currentLocation.lng,
-              parseFloat(/** @type {string} */ (r.lat)),
-              parseFloat(/** @type {string} */ (r.lng))
-            )
+  const fragment = document.createDocumentFragment();
+  const temp = document.createElement('div');
+  favs.forEach((r) => {
+    const dist = state.currentLocation
+      ? formatDist(
+          haversine(
+            state.currentLocation.lat,
+            state.currentLocation.lng,
+            parseFloat(/** @type {string} */ (r.lat)),
+            parseFloat(/** @type {string} */ (r.lng))
           )
-        : '';
-      return renderFavCardTemplate(r, dist);
-    })
-    .join('');
-
-  container.querySelectorAll('.rest-card').forEach((card) => {
-    card.addEventListener('click', () => {
-      if (_callbacks.onHideFavoritesPage) {
-        _callbacks.onHideFavoritesPage();
-      }
-      if (_callbacks.onCardClick) {
-        _callbacks.onCardClick(/** @type {HTMLElement} */ (card).dataset.id);
-      }
-    });
+        )
+      : '';
+    temp.innerHTML = renderFavCardTemplate(r, dist);
+    const card = temp.firstElementChild;
+    if (card) {
+      card.addEventListener('click', () => {
+        if (_callbacks.onHideFavoritesPage) {
+          _callbacks.onHideFavoritesPage();
+        }
+        if (_callbacks.onCardClick) {
+          _callbacks.onCardClick(/** @type {HTMLElement} */ (card).dataset.id);
+        }
+      });
+      fragment.appendChild(card);
+    }
   });
+
+  container.innerHTML = '';
+  container.appendChild(fragment);
 }
 
 /**

@@ -270,9 +270,15 @@ def parse_osm_element(elem: OsmElement) -> Optional[ParsedOsmPlace]:
         return None
 
     center: Optional[Dict[str, float]] = elem.get('center')
-    lat: Optional[float] = elem.get('lat') or (center or {}).get('lat')
-    lng: Optional[float] = elem.get('lon') or (center or {}).get('lon')
-    if not lat or not lng:
+    lat_raw: Optional[float] = elem.get('lat') or (center or {}).get('lat')
+    lng_raw: Optional[float] = elem.get('lon') or (center or {}).get('lon')
+    if not lat_raw or not lng_raw:
+        return None
+
+    try:
+        lat = float(lat_raw)
+        lng = float(lng_raw)
+    except (ValueError, TypeError):
         return None
 
     return {
@@ -280,8 +286,8 @@ def parse_osm_element(elem: OsmElement) -> Optional[ParsedOsmPlace]:
         'osm_type': elem.get('type', ''),
         'name': name,
         'name_en': tags.get('name:en', ''),
-        'lat': float(lat),
-        'lng': float(lng),
+        'lat': lat,
+        'lng': lng,
         'cuisine': tags.get('cuisine', ''),
         'phone': tags.get('phone', tags.get('contact:phone', '')),
         'website': tags.get('website', tags.get('contact:website', '')),

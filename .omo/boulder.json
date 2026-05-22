@@ -8,7 +8,7 @@
       "plan_name": "lunchgo-refactor",
       "status": "active",
       "started_at": "2026-05-22T03:33:30.088Z",
-      "updated_at": "2026-05-22T04:43:48.808Z",
+      "updated_at": "2026-05-22T05:46:45.481Z",
       "session_ids": [
         "ses_1b26540c4ffe50IIYx54Ll38MY"
       ],
@@ -146,6 +146,58 @@
           "status": "completed",
           "ended_at": "2026-05-22T04:43:48.808Z",
           "elapsed_ms": 27787
+        },
+        "todo:16": {
+          "task_key": "todo:16",
+          "task_label": "16",
+          "task_title": "Main app entry point + module integration",
+          "session_id": "ses_1b2001764ffeq4Jlfh7TAgR77J",
+          "agent": "Sisyphus-Junior",
+          "category": "deep",
+          "updated_at": "2026-05-22T05:11:13.286Z",
+          "started_at": "2026-05-22T05:10:46.679Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T05:11:13.286Z",
+          "elapsed_ms": 26607
+        },
+        "todo:17": {
+          "task_key": "todo:17",
+          "task_label": "17",
+          "task_title": "Playwright E2E test suite",
+          "session_id": "ses_1b1e7767bffewePSGepWNE80et",
+          "agent": "Sisyphus-Junior",
+          "category": "unspecified-high",
+          "updated_at": "2026-05-22T05:24:06.925Z",
+          "started_at": "2026-05-22T05:23:42.220Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T05:24:06.923Z",
+          "elapsed_ms": 24703
+        },
+        "todo:18": {
+          "task_key": "todo:18",
+          "task_label": "18",
+          "task_title": "Pytest unit test suite",
+          "session_id": "ses_1b1dbb836ffezC5UkJ9ycv1mfP",
+          "agent": "Sisyphus-Junior",
+          "category": "unspecified-high",
+          "updated_at": "2026-05-22T05:39:35.302Z",
+          "started_at": "2026-05-22T05:38:13.229Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T05:39:35.302Z",
+          "elapsed_ms": 82073
+        },
+        "todo:19": {
+          "task_key": "todo:19",
+          "task_label": "19",
+          "task_title": "Performance optimization implementation",
+          "session_id": "ses_1b1cd7af5ffeJ6unIx7isbwDNQ",
+          "agent": "Sisyphus-Junior",
+          "category": "quick",
+          "updated_at": "2026-05-22T05:46:45.481Z",
+          "started_at": "2026-05-22T05:46:05.588Z",
+          "status": "completed",
+          "ended_at": "2026-05-22T05:46:45.480Z",
+          "elapsed_ms": 39892
         }
       }
     }
@@ -153,7 +205,7 @@
   "active_plan": "/home/timo_liao/projects/lunchgo/.omo/plans/lunchgo-refactor.md",
   "started_at": "2026-05-22T03:33:30.088Z",
   "status": "active",
-  "updated_at": "2026-05-22T04:43:48.808Z",
+  "updated_at": "2026-05-22T05:46:45.481Z",
   "session_ids": [
     "ses_1b26540c4ffe50IIYx54Ll38MY"
   ],
@@ -291,6 +343,58 @@
       "status": "completed",
       "ended_at": "2026-05-22T04:43:48.808Z",
       "elapsed_ms": 27787
+    },
+    "todo:16": {
+      "task_key": "todo:16",
+      "task_label": "16",
+      "task_title": "Main app entry point + module integration",
+      "session_id": "ses_1b2001764ffeq4Jlfh7TAgR77J",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-22T05:11:13.286Z",
+      "started_at": "2026-05-22T05:10:46.679Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T05:11:13.286Z",
+      "elapsed_ms": 26607
+    },
+    "todo:17": {
+      "task_key": "todo:17",
+      "task_label": "17",
+      "task_title": "Playwright E2E test suite",
+      "session_id": "ses_1b1e7767bffewePSGepWNE80et",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-05-22T05:24:06.925Z",
+      "started_at": "2026-05-22T05:23:42.220Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T05:24:06.923Z",
+      "elapsed_ms": 24703
+    },
+    "todo:18": {
+      "task_key": "todo:18",
+      "task_label": "18",
+      "task_title": "Pytest unit test suite",
+      "session_id": "ses_1b1dbb836ffezC5UkJ9ycv1mfP",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-05-22T05:39:35.302Z",
+      "started_at": "2026-05-22T05:38:13.229Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T05:39:35.302Z",
+      "elapsed_ms": 82073
+    },
+    "todo:19": {
+      "task_key": "todo:19",
+      "task_label": "19",
+      "task_title": "Performance optimization implementation",
+      "session_id": "ses_1b1cd7af5ffeJ6unIx7isbwDNQ",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-22T05:46:45.481Z",
+      "started_at": "2026-05-22T05:46:05.588Z",
+      "status": "completed",
+      "ended_at": "2026-05-22T05:46:45.480Z",
+      "elapsed_ms": 39892
     }
   },
   "agent": "atlas"

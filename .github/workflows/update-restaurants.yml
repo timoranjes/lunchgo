@@ -4,8 +4,65 @@ on:
   schedule:
     - cron: '0 2 * * *'  # Daily at 2 AM UTC (10 AM HKT)
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'index.html'
+      - 'package.json'
+      - 'requirements*.txt'
+      - 'playwright.config.js'
+      - 'pytest.ini'
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-test.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt -r requirements-test.txt
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run pytest
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Run Playwright E2E tests
+        run: npx playwright test
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   update:
     runs-on: ubuntu-latest
     permissions:
@@ -18,18 +75,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install -r requirements.txt
 
       - name: Fetch and merge restaurant data
-        run: python scripts/update_restaurants.py
+        run: python scripts/enrich_data.py
 
       - name: Check for changes
         id: check_changes
         run: |
-          git diff --stat data/hk_restaurants.json || echo "No changes detected"
-          if git diff --quiet data/hk_restaurants.json; then
+          if git diff --quiet data/; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -40,7 +98,7 @@ jobs:
         run: |
           git config user.name "LunchGo Bot"
           git config user.email "bot@lunchgo.app"
-          git add data/hk_restaurants.json
+          git add data/
           git diff --staged --stat
-          git commit -m "data: update HK restaurant data $(date +%Y-%m-%d)"
+          git commit -m "data: update restaurant data $(date +%Y-%m-%d)"
           git push

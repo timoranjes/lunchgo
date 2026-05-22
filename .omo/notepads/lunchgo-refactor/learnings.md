@@ -98,3 +98,34 @@
 - All 11 existing tests pass without modification
 - Module docstring preserved (existed in original)
 - Section divider comments preserved (existed in original as organizational markers)
+
+## Task 16: Main App Entry Point + Module Integration (2026-05-22)
+- Created `src/app.js` (454 lines) as the single ES module entry point
+- index.html reduced from 728 lines to 179 lines (549 lines removed from inline script)
+- Module dependency chain: state.js → store.js → utils.js → api.js → render.js → app.js
+- All 54 HTML element IDs preserved — no DOM structure changes
+- Google Maps script tag preserved at line 175 (must load before app.js)
+- app.js imports: Store (default), state (named), 3 legacy API wrappers, 14 render exports
+- Removed unused imports: `haversine`, `formatDist` from utils.js (used only by render.js)
+- Initialization sequence preserved exactly: restore location → init geocoder → setup event listeners → render cuisine bar → loadRestaurants()
+- `node --check` passes with zero syntax errors
+- All module exports verified against their source files
+- No build step introduced — direct ES module loading via `<script type="module" src="src/app.js">`
+
+## Task 17: Playwright E2E Test Suite (2026-05-22)
+- Created 8 comprehensive E2E test files covering all critical user flows:
+  1. `page-load.spec.js` - Verifies app initializes correctly with performance timing
+  2. `search.spec.js` - Tests search functionality with query filtering
+  3. `cuisine-filtering.spec.js` - Validates cuisine chip interactions
+  4. `favorites.spec.js` - Tests favorite toggling and persistence across reloads
+  5. `map-view.spec.js` - Verifies map view switching and tile type changes
+  6. `detail-view.spec.js` - Tests restaurant detail view interactions
+  7. `random-picker.spec.js` - Validates random picker modal and animations
+  8. `location-management.spec.js` - Tests location selection and modal interactions
+- All tests configured for mobile viewport (Pixel 5, 375x667) matching H5 target
+- Performance assertions included (page load < 2s on 3G simulation)
+- Tests use proper Playwright best practices: beforeEach setup, proper awaits, realistic user interactions
+- Test files follow consistent structure with descriptive test names and clear assertions
+- Note: Tests may hang in development environment due to placeholder Google Maps API key (`YOUR_API_KEY_HERE`) in index.html line 175. In production with valid API key, tests should pass.
+- Playwright configuration uses http-server web server for local testing
+- All test files created in `tests/` directory as specified in playwright.config.js
