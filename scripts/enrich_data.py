@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import glob
-import hashlib
 import json
 import logging
 import math
@@ -381,6 +380,7 @@ def merge(
     results: List[MergedRestaurant] = []
     fehd_matched = 0
     fehd_unmatched = 0
+    fehd_empty_name = 0
 
     for licno, fehd in fehd_data.items():
         dist_code: str = fehd['district']
@@ -440,20 +440,19 @@ def merge(
                 'source': 'fehd+osm',
             })
         else:
-            fehd_unmatched += 1
-            center: Tuple[float, float] = dist_info.get(
-                'center', (22.319, 114.169),
-            )
-            h = int(hashlib.md5(licno.encode()).hexdigest(), 16)
-            lat_off = ((h % 1000) - 500) * 0.00002
-            lng_off = (((h >> 10) % 1000) - 500) * 0.00002
+            # Skip records with empty names entirely
+            check_name = (name_tc or name_en or '').strip()
+            if not check_name:
+                fehd_empty_name += 1
+                continue
 
+            fehd_unmatched += 1
             results.append({
                 'id': f'fehd_{licno}',
                 'name': name_tc or name_en,
                 'name_en': name_en,
-                'lat': round(center[0] + lat_off, 5),
-                'lng': round(center[1] + lng_off, 5),
+                'lat': None,
+                'lng': None,
                 'address': fehd.get('address_tc', '') or fehd.get('address', ''),
                 'district': dist_info.get('en', dist_code),
                 'district_tc': dist_info.get('tc', ''),
@@ -499,6 +498,7 @@ def merge(
 
     logger.info('  FEHD+OSM matched: %d', fehd_matched)
     logger.info('  FEHD-only (no match): %d', fehd_unmatched)
+    logger.info('  FEHD empty-name (excluded): %d', fehd_empty_name)
     logger.info('  OSM-only (new places): %d', osm_only)
     logger.info('  Total: %d', len(results))
     return results
@@ -530,7 +530,12 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
 
         rows: List[List[Any]] = []
         for r in records:
-            row = [r.get(f, '') for f in FIELDS]
+            row = []
+            for f in FIELDS:
+                val = r.get(f, '')
+                if val is None:
+                    val = 0 if f in ('lat', 'lng') else ''
+                row.append(val)
             rows.append(row)
             if r.get('cuisine'):
                 total_with_cuisine += 1

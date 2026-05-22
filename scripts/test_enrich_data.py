@@ -432,8 +432,8 @@ class TestMergeLogic:
         assert fehd_record['district'] == 'Islands'
         assert fehd_record['district_tc'] == '離島'
         assert fehd_record['source'] == 'fehd'
-        assert abs(fehd_record['lat'] - 22.250) < 0.01
-        assert abs(fehd_record['lng'] - 114.050) < 0.01
+        assert fehd_record['lat'] is None
+        assert fehd_record['lng'] is None
 
     def test_merge_osm_only_no_fehd(self):
         fehd_data = {}
