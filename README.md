@@ -77,9 +77,9 @@ npx playwright install --with-deps chromium
 pip install -r requirements.txt -r requirements-test.txt
 ```
 
-### Replace API Key
+### Google Maps API Key
 
-Edit `index.html` line ~175, replace `YOUR_API_KEY_HERE` with your Google Maps API key.
+API key is already configured in `index.html` and `src/app.js`. If you need to rotate it, update both files.
 
 ### Run Locally
 

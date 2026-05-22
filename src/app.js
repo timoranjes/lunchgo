@@ -29,7 +29,7 @@ import {
   teardownLazyLoading,
 } from './render.js';
 
-const GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY_HERE';
+const GOOGLE_MAPS_API_KEY = 'AIzaSyBN_pMA5dYGC70sS4OnoYALDszrTUUpjkM';
 
 const DEFAULT_LOCATIONS = [
   { id: 'central', label: '中環', lat: 22.2808, lng: 114.1588, isDefault: true },
