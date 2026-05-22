@@ -23,6 +23,7 @@ import Store from './store.js';
 import {
   haversine,
   formatDist,
+  isValidRestaurant,
   renderStars,
   priceLevel,
   escHtml,
@@ -364,6 +365,11 @@ export function updateDisplay(reset) {
 
   let list = state.placesData;
 
+  // VALIDATION: Filter out invalid entries first
+  const preValidationCount = list.length;
+  list = list.filter(isValidRestaurant);
+  const filteredCount = preValidationCount - list.length;
+
   if (state.searchQuery) {
     const q = state.searchQuery.toLowerCase();
     list = list.filter(
@@ -436,7 +442,16 @@ export function updateDisplay(reset) {
 
   const emptyEl = document.getElementById('empty-state');
   if (emptyEl) {
-    emptyEl.style.display = list.length === 0 && total > 0 ? 'block' : 'none';
+    const hasResults = preValidationCount > 0;
+    if (list.length === 0 && hasResults) {
+      emptyEl.innerHTML = '找不到餐廳（已過濾 ' + filteredCount + ' 筆無效資料）';
+      emptyEl.style.display = 'block';
+    } else if (list.length === 0) {
+      emptyEl.textContent = '找不到餐廳';
+      emptyEl.style.display = 'block';
+    } else {
+      emptyEl.style.display = 'none';
+    }
   }
 }
 
@@ -1054,6 +1069,7 @@ export function renderFavorites() {
   }
   if (emptyEl) emptyEl.style.display = 'none';
 
+  // Filter out saved favorites that no longer exist in placesData (e.g., filtered by validation)
   let favs = favIds
     .map((id) => state.placesData.find((r) => r.id === id))
     .filter(Boolean);
