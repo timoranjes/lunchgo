@@ -764,7 +764,7 @@ Max Concurrent: 8 (Waves 1 & 2)
   - Files: `requirements-test.txt`, `pytest.ini`, `scripts/test_enrich_data.py`
   - Pre-commit: Pytest dry run
 
-- [ ] 8. Google Places API service module
+- [x] 8. Google Places API service module
 
   **What to do**:
   - Extract Google Maps/Places integration from index.html to `src/api.js`

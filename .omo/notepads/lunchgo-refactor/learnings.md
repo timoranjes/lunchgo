@@ -67,3 +67,16 @@
 - `python3 -m pytest scripts/test_enrich_data.py -v` passes 11/11
 - No modifications to enrich_data.py logic
 - No heavy dependencies added (stdlib + requests only)
+
+## Task 8: Google Places API Service Module (2026-05-22)
+- Created `src/api.js` (489 lines) extracting Google Places integration from index.html
+- Three primary exports: `loadPlacesData()`, `fetchPlaceDetails()`, `fetchPhotosForTopRestaurants()`
+- Promise-based API with retry logic (exponential backoff, max 3 retries for transient failures)
+- Error classification system: `classifyError()` maps Google status codes to {status, message, kind}
+- Retryable statuses: UNKNOWN_ERROR, OVER_QUERY_LIMIT, REQUEST_DENIED
+- Restaurant schema preserved exactly: id, name, name_en, lat, lng, address, rating, user_ratings_total, price_level, types, cuisine, photos, photo_refs, place_id, source, amenity
+- Legacy wrappers (`loadPlacesDataLegacy`, etc.) for drop-in replacement in index.html
+- index.html inline functions replaced with thin delegating wrappers (lines 244-280)
+- `npx tsc --noEmit` passes with zero errors
+- `@type` inline casts required for Google Maps SDK callback params (no TypeScript definitions)
+- `PlacesResult_` typedef needed for `withRetry` generic return type inference

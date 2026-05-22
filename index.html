@@ -177,6 +177,7 @@
   <script type="module">
     import Store from './src/store.js';
     import { haversine, formatDist, renderStars, priceLevel, escHtml, escAttr, matchCuisine } from './src/utils.js';
+    import { loadPlacesDataLegacy, fetchPlaceDetailsLegacy, fetchPhotosForTopRestaurantsLegacy } from './src/api.js';
 
     // -- Config --
     const GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY_HERE';
@@ -240,113 +241,42 @@
     // -- Storage -- (imported from src/store.js)
     // -- Utils -- (imported from src/utils.js)
 
-    // -- Data Loading (Google Places) --
+    // -- Data Loading (Google Places) -- (imported from src/api.js)
+    // loadPlacesDataLegacy, fetchPlaceDetailsLegacy, fetchPhotosForTopRestaurantsLegacy
+
+    /**
+     * Load Places data for the current location.
+     * Delegates to src/api.js with error banner handling.
+     */
     async function loadPlacesData(loc) {
       if (!state.placesService || state.placesLoaded) return;
-      state.placesLoaded = true;
-
-      const request = {
-        location: { lat: loc.lat, lng: loc.lng },
-        radius: 2000,
-        type: 'restaurant',
-      };
-
-      state.placesService.nearbySearch(request, (results, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-          // Get basic data from nearbySearch
-          state.placesData = results.map(p => ({
-            id: 'place_' + (p.place_id || Math.random().toString(36).slice(2)),
-            name: p.name || '',
-            name_en: p.name || '',
-            lat: p.geometry?.location?.lat(),
-            lng: p.geometry?.location?.lng(),
-            address: p.vicinity || '',
-            rating: p.rating || 0,
-            user_ratings_total: p.user_ratings_total || 0,
-            price_level: p.price_level || 0,
-            types: p.types || [],
-            cuisine: (p.types || []).filter(t => !['restaurant', 'food', 'point_of_interest', 'establishment'].includes(t)).join(', '),
-            photos: [],
-            photo_refs: (p.photos || []).slice(0, 5).map(ph => ph.photo_reference),
-            place_id: p.place_id,
-            source: 'places',
-            amenity: 'restaurant',
-          }));
-
-          console.log('[LunchGo] Loaded ' + state.placesData.length + ' Places results');
-
-          // Fetch photos for top 20 restaurants (Places API free tier limit)
-          fetchPhotosForTopRestaurants(state.placesData.slice(0, 20));
-
-          updateDisplay();
-        } else {
-          console.error('[LunchGo] Places nearbySearch failed:', status);
-          const banner = document.getElementById('error-banner');
-          banner.textContent = '載入餐廳資料失敗：' + status;
-          banner.classList.add('show');
-          setTimeout(() => banner.classList.remove('show'), 5000);
-        }
+      await loadPlacesDataLegacy(state, loc, () => {
+        updateDisplay();
+      }, (errorMsg) => {
+        console.error('[LunchGo] Places nearbySearch failed:', errorMsg);
+        const banner = document.getElementById('error-banner');
+        banner.textContent = '載入餐廳資料失敗：' + errorMsg;
+        banner.classList.add('show');
+        setTimeout(() => banner.classList.remove('show'), 5000);
       });
     }
 
+    /**
+     * Fetch photos for top restaurants.
+     * Delegates to src/api.js.
+     */
     function fetchPhotosForTopRestaurants(places) {
-      if (!state.placesService || places.length === 0) return;
-
-      let completed = 0;
-      places.forEach((place, idx) => {
-        state.placesService.getDetails({
-          placeId: place.place_id,
-          fields: ['photos', 'formatted_address', 'opening_hours', 'formatted_phone_number', 'website', 'price_level'],
-        }, (details, status) => {
-          completed++;
-          if (status === google.maps.places.PlacesServiceStatus.OK && details) {
-            // Update photos
-            if (details.photos && details.photos.length > 0) {
-              place.photos = details.photos.slice(0, 5).map(ph =>
-                ph.getUrl({ maxWidth: 400, maxHeight: 300 })
-              );
-              place.photo_refs = details.photos.slice(0, 5).map(ph => ph.photo_reference);
-            }
-            // Update address if better
-            if (details.formatted_address) {
-              place.address = details.formatted_address;
-            }
-            // Update price level
-            if (details.price_level) {
-              place.price_level = details.price_level;
-            }
-            // Update hours/phone/website
-            if (details.opening_hours) {
-              place.opening_hours = details.opening_hours;
-            }
-            if (details.formatted_phone_number) {
-              place.phone = details.formatted_phone_number;
-            }
-            if (details.website) {
-              place.website = details.website;
-            }
-          }
-
-          // Re-render after all photo fetches complete
-          if (completed === places.length) {
-            updateDisplay();
-          }
-        });
+      fetchPhotosForTopRestaurantsLegacy(places, state, () => {
+        updateDisplay();
       });
     }
 
+    /**
+     * Fetch place details by place_id.
+     * Delegates to src/api.js.
+     */
     function fetchPlaceDetails(placeId, callback) {
-      if (!state.placesService) { callback(null); return; }
-      state.placesService.getDetails({
-        placeId: placeId,
-        fields: ['name', 'formatted_address', 'formatted_phone_number', 'opening_hours', 'rating', 'user_ratings_total', 'price_level', 'photos', 'types', 'url', 'website', 'geometry', 'reviews'],
-      }, (result, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK) {
-          callback(result);
-        } else {
-          callback(null);
-        }
-      });
+      fetchPlaceDetailsLegacy(state, placeId, callback);
     }
 
     async function loadRestaurants() {
