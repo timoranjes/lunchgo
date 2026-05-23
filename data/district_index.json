@@ -1,100 +1,100 @@
 {
-  "v": 2,
-  "total": 17195,
+  "v": 3,
+  "total": 20470,
   "districts": {
     "Southern": {
       "file": "data/district_southern.json",
-      "count": 337,
+      "count": 407,
       "url": "data/district_southern.json"
     },
     "Eastern": {
       "file": "data/district_eastern.json",
-      "count": 908,
+      "count": 1027,
       "url": "data/district_eastern.json"
     },
     "Central/Western": {
       "file": "data/district_central_western.json",
-      "count": 1790,
+      "count": 1998,
       "url": "data/district_central_western.json"
     },
     "Kowloon City": {
       "file": "data/district_kowloon_city.json",
-      "count": 1030,
+      "count": 1124,
       "url": "data/district_kowloon_city.json"
     },
     "Yuen Long": {
       "file": "data/district_yuen_long.json",
-      "count": 1012,
+      "count": 1945,
       "url": "data/district_yuen_long.json"
     },
     "North": {
       "file": "data/district_north.json",
-      "count": 391,
+      "count": 856,
       "url": "data/district_north.json"
     },
     "Tai Po": {
       "file": "data/district_tai_po.json",
-      "count": 439,
+      "count": 517,
       "url": "data/district_tai_po.json"
     },
     "Tuen Mun": {
       "file": "data/district_tuen_mun.json",
-      "count": 744,
+      "count": 749,
       "url": "data/district_tuen_mun.json"
     },
     "Mong Kok": {
       "file": "data/district_mong_kok.json",
-      "count": 1235,
+      "count": 1392,
       "url": "data/district_mong_kok.json"
     },
     "Sha Tin": {
       "file": "data/district_sha_tin.json",
-      "count": 891,
+      "count": 1009,
       "url": "data/district_sha_tin.json"
     },
     "Yau Tsim": {
       "file": "data/district_yau_tsim.json",
-      "count": 1894,
+      "count": 2142,
       "url": "data/district_yau_tsim.json"
     },
     "Sham Shui Po": {
       "file": "data/district_sham_shui_po.json",
-      "count": 967,
+      "count": 1099,
       "url": "data/district_sham_shui_po.json"
     },
     "Wan Chai": {
       "file": "data/district_wan_chai.json",
-      "count": 1760,
+      "count": 2000,
       "url": "data/district_wan_chai.json"
     },
     "Tsuen Wan": {
       "file": "data/district_tsuen_wan.json",
-      "count": 777,
+      "count": 838,
       "url": "data/district_tsuen_wan.json"
     },
     "Kwai Tsing": {
       "file": "data/district_kwai_tsing.json",
-      "count": 540,
+      "count": 555,
       "url": "data/district_kwai_tsing.json"
     },
     "Sai Kung": {
       "file": "data/district_sai_kung.json",
-      "count": 593,
+      "count": 642,
       "url": "data/district_sai_kung.json"
     },
     "Kwun Tong": {
       "file": "data/district_kwun_tong.json",
-      "count": 865,
+      "count": 965,
       "url": "data/district_kwun_tong.json"
     },
     "Islands": {
       "file": "data/district_islands.json",
-      "count": 521,
+      "count": 643,
       "url": "data/district_islands.json"
     },
     "Wong Tai Sin": {
       "file": "data/district_wong_tai_sin.json",
-      "count": 501,
+      "count": 562,
       "url": "data/district_wong_tai_sin.json"
     }
   }
