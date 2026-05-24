@@ -201,12 +201,27 @@ export function parseCompactRecord(row, fields) {
     obj[fields[i]] = row[i];
   }
 
+  // Infer source from ID prefix (district JSON v2 doesn't have source field)
+  const id = String(obj.id || '');
+  const inferredSource = obj.source ||
+                         (id.startsWith('fehd_') ? 'fehd' :
+                          id.startsWith('osm_') ? 'osm' :
+                          id.startsWith('place_') ? 'places' : 'local');
+
+  // Handle coordinates: preserve null for validation, don't convert to 0
+  const rawLat = obj.lat;
+  const rawLng = obj.lng;
+  const lat = (rawLat === null || rawLat === undefined) ? null :
+              (typeof rawLat === 'number' ? rawLat : parseFloat(String(rawLat)));
+  const lng = (rawLng === null || rawLng === undefined) ? null :
+              (typeof rawLng === 'number' ? rawLng : parseFloat(String(rawLng)));
+
   return {
-    id: String(obj.id || ''),
+    id: id,
     name: String(obj.name || ''),
     name_en: String(obj.name_en || obj.name || ''),
-    lat: typeof obj.lat === 'number' ? obj.lat : parseFloat(String(obj.lat || 0)),
-    lng: typeof obj.lng === 'number' ? obj.lng : parseFloat(String(obj.lng || 0)),
+    lat: lat,
+    lng: lng,
     address: String(obj.address || ''),
     rating: 0,
     user_ratings_total: 0,
@@ -216,7 +231,7 @@ export function parseCompactRecord(row, fields) {
     photos: [],
     photo_refs: [],
     place_id: '',
-    source: 'local',
+    source: inferredSource,
     amenity: 'restaurant',
     district: String(obj.district || ''),
     district_tc: String(obj.district_tc || ''),
