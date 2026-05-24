@@ -138,7 +138,7 @@ export function renderCardTemplate(r) {
     thumbHtml +=
       '<img src="' +
       escAttr(r.photos[0]) +
-      '" alt="" loading="lazy" onerror="this.style.display=\'none\'" />';
+      '" alt="" loading="lazy" onerror="this.classList.add(\'img-error\')" />';
   }
   thumbHtml += '</div>';
 
@@ -199,7 +199,7 @@ export function renderDiscoveryCardTemplate(r) {
   let imgHtml = '';
   if (r.photos && r.photos.length > 0) {
     imgHtml =
-      '<img src="' + escAttr(r.photos[0]) + '" alt="" loading="lazy" />';
+      '<img src="' + escAttr(r.photos[0]) + '" alt="" loading="lazy" onerror="this.classList.add(\'img-error\')" />';
   }
 
   return (
@@ -250,7 +250,7 @@ export function renderFavCardTemplate(r, dist) {
     thumbHtml +=
       '<img src="' +
       escAttr(r.photos[0]) +
-      '" alt="" loading="lazy" onerror="this.style.display=\'none\'" />';
+      '" alt="" loading="lazy" onerror="this.classList.add(\'img-error\')" />';
   }
   thumbHtml += '</div>';
 
