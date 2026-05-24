@@ -67,7 +67,7 @@ async function loadPlacesData(loc) {
     return [];
   }
 
-  const topPlaces = restaurants.slice(0, 20);
+  const topPlaces = restaurants;
   await new Promise((resolve) => {
     fetchPhotosForTopRestaurantsLegacy(topPlaces, { placesService: state.placesService }, () => {
       resolve();

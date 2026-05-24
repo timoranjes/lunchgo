@@ -631,6 +631,7 @@ export function renderMapMarkers(list) {
   const visible = bounds
     ? list.filter((r) => {
         if (!r.lat || !r.lng) return false;
+        if (!isFinite(parseFloat(String(r.lat))) || !isFinite(parseFloat(String(r.lng)))) return false;
         try {
           return bounds.contains({
             lat: parseFloat(/** @type {string} */ (r.lat)),
@@ -640,7 +641,11 @@ export function renderMapMarkers(list) {
           return false;
         }
       })
-    : list.filter((r) => r.lat && r.lng);
+    : list.filter((r) => {
+        if (!r.lat || !r.lng) return false;
+        if (!isFinite(parseFloat(String(r.lat))) || !isFinite(parseFloat(String(r.lng)))) return false;
+        return true;
+      });
 
   const display = visible.slice(0, 500);
   display.forEach((r) => {
