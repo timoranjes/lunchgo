@@ -192,8 +192,15 @@ export function isValidRestaurant(restaurant) {
   const lng = parseFloat(/** @type {string} */ (restaurant.lng));
 
   if (!isFinite(lat) || !isFinite(lng)) return false;
-  if (lat === 0 && lng === 0) return false;
+  if (lat === 0 || lng === 0) return false;
   if (lat < 22.11 || lat > 22.57 || lng < 113.83 || lng > 114.43) return false;
+
+  // Validate rating: must be 0-5 or undefined/null
+  if (restaurant.rating !== undefined && restaurant.rating !== null) {
+    const rating = typeof restaurant.rating === 'number' ? restaurant.rating : parseFloat(String(restaurant.rating));
+    if (!isNaN(rating) && (rating < 0 || rating > 5)) return false;
+  }
+
   if (restaurant.source === 'fehd') return false;
 
   return true;
