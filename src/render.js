@@ -435,9 +435,9 @@ export function updateDisplay(reset) {
     state.loadMoreIndex = 0;
   }
 
-  const scheduleRender = typeof requestIdleCallback === 'function'
-    ? requestIdleCallback
-    : requestAnimationFrame;
+  const scheduleRender = typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame
+    : (cb) => setTimeout(cb, 16);
 
   scheduleRender(() => {
     renderDiscovery(list);

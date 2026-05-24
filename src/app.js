@@ -312,9 +312,10 @@ function setView(view) {
     setTimeout(() => {
       if (state.map) {
         google.maps.event.trigger(state.map, 'resize');
+        state.map.setCenter({ lat: state.currentLocation.lat, lng: state.currentLocation.lng });
         renderMapMarkers(state.filtered || state.placesData);
       }
-    }, 200);
+    }, 500);
   }
 }
 
