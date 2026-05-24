@@ -18,6 +18,8 @@
  * @returns {number} Distance in meters
  */
 export function haversine(lat1, lon1, lat2, lon2) {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return Infinity;
+  if (!isFinite(lat1) || !isFinite(lon1) || !isFinite(lat2) || !isFinite(lon2)) return Infinity;
   const R = 6371000;
   const toRad = Math.PI / 180;
   const dLat = (lat2 - lat1) * toRad;

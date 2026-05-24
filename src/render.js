@@ -413,6 +413,14 @@ export function updateDisplay(reset) {
     case 'name':
       list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       break;
+    case 'district':
+      list.sort((a, b) => {
+        const da = a.district_tc || a.district || '\uffff';
+        const db = b.district_tc || b.district || '\uffff';
+        const cmp = da.localeCompare(db, 'zh-Hant');
+        return cmp !== 0 ? cmp : (a.distance || 0) - (b.distance || 0);
+      });
+      break;
   }
 
   state.filtered = list;

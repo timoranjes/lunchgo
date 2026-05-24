@@ -161,7 +161,7 @@
  * @property {Restaurant[]} filtered - Filtered subset after search/cuisine/sort
  * @property {Location|null} currentLocation - Selected location
  * @property {string} currentLocationLabel - Human-readable location label
- * @property {'distance'|'rating'|'name'} currentSort - Active sort key
+ * @property {'distance'|'rating'|'name'|'district'} currentSort - Active sort key
  * @property {string} searchQuery - Current text search input
  * @property {'list'|'map'} currentView - Active view mode
  * @property {string} activeCuisine - Selected cuisine filter ID, 'all' for none

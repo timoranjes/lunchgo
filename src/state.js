@@ -14,7 +14,7 @@
  * @property {import('./types.js').Restaurant[]} filtered - Filtered subset after search/cuisine/sort
  * @property {import('./types.js').Location|null} currentLocation - Selected location
  * @property {string} currentLocationLabel - Human-readable label for current location
- * @property {'distance'|'rating'|'name'} currentSort - Active sort key
+ * @property {'distance'|'rating'|'name'|'district'} currentSort - Active sort key
  * @property {string} searchQuery - Current text search input
  * @property {'list'|'map'} currentView - Active view: 'list' | 'map'
  * @property {string} activeCuisine - Selected cuisine filter ID, 'all' for none
