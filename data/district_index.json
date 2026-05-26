@@ -1,6 +1,6 @@
 {
   "v": 3,
-  "total": 20446,
+  "total": 20425,
   "districts": {
     "Southern": {
       "file": "data/district_southern.json",
@@ -9,7 +9,7 @@
     },
     "Eastern": {
       "file": "data/district_eastern.json",
-      "count": 1025,
+      "count": 1024,
       "url": "data/district_eastern.json"
     },
     "Central/Western": {
@@ -19,7 +19,7 @@
     },
     "Kowloon City": {
       "file": "data/district_kowloon_city.json",
-      "count": 1122,
+      "count": 1116,
       "url": "data/district_kowloon_city.json"
     },
     "Yuen Long": {
@@ -34,32 +34,32 @@
     },
     "Tai Po": {
       "file": "data/district_tai_po.json",
-      "count": 517,
+      "count": 515,
       "url": "data/district_tai_po.json"
     },
     "Tuen Mun": {
       "file": "data/district_tuen_mun.json",
-      "count": 749,
+      "count": 748,
       "url": "data/district_tuen_mun.json"
     },
     "Mong Kok": {
       "file": "data/district_mong_kok.json",
-      "count": 1392,
+      "count": 1390,
       "url": "data/district_mong_kok.json"
     },
     "Sha Tin": {
       "file": "data/district_sha_tin.json",
-      "count": 1009,
+      "count": 1008,
       "url": "data/district_sha_tin.json"
     },
     "Yau Tsim": {
       "file": "data/district_yau_tsim.json",
-      "count": 2139,
+      "count": 2137,
       "url": "data/district_yau_tsim.json"
     },
     "Sham Shui Po": {
       "file": "data/district_sham_shui_po.json",
-      "count": 1097,
+      "count": 1096,
       "url": "data/district_sham_shui_po.json"
     },
     "Wan Chai": {
@@ -74,7 +74,7 @@
     },
     "Kwai Tsing": {
       "file": "data/district_kwai_tsing.json",
-      "count": 553,
+      "count": 552,
       "url": "data/district_kwai_tsing.json"
     },
     "Sai Kung": {
@@ -84,17 +84,17 @@
     },
     "Kwun Tong": {
       "file": "data/district_kwun_tong.json",
-      "count": 961,
+      "count": 959,
       "url": "data/district_kwun_tong.json"
     },
     "Islands": {
       "file": "data/district_islands.json",
-      "count": 643,
+      "count": 642,
       "url": "data/district_islands.json"
     },
     "Wong Tai Sin": {
       "file": "data/district_wong_tai_sin.json",
-      "count": 560,
+      "count": 559,
       "url": "data/district_wong_tai_sin.json"
     }
   }
