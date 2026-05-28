@@ -9,7 +9,7 @@
 
 import Store from './store.js';
 import { state } from './state.js';
-import { loadPlacesDataLegacy, fetchPlaceDetailsLegacy, fetchPhotosForTopRestaurantsLegacy } from './api.js';
+import { loadPlacesData as loadPlacesDataApi, fetchPlaceDetailsLegacy, fetchPhotosForTopRestaurantsLegacy } from './api.js';
 import {
   updateDisplay,
   renderMapMarkers,
@@ -56,11 +56,20 @@ setRenderCallbacks({
 async function loadPlacesData(loc) {
   if (!state.placesService || state.placesLoaded) return [];
 
-  const { loadPlacesDataWithTimeout } = await import('./api.js');
-  const { restaurants, error } = await loadPlacesDataWithTimeout(
-    state.placesService,
-    loc
-  );
+  const timeoutMs = 10000;
+  const timeoutPromise = new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        restaurants: [],
+        error: { status: 'TIMEOUT', message: 'Places API 請求逾時', kind: 'network' },
+      });
+    }, timeoutMs);
+  });
+
+  const { restaurants, error } = await Promise.race([
+    loadPlacesDataApi(state.placesService, loc),
+    timeoutPromise,
+  ]);
 
   if (error) {
     console.error('[LunchGo] Places nearbySearch failed:', error.message);
@@ -136,10 +145,15 @@ async function loadRestaurants() {
   const errorBanner = document.getElementById('error-banner');
 
   loadingEl.style.display = 'block';
-  restListEl.innerHTML = renderSkeletonCards(6);
+  restListEl.innerHTML = '';
   emptyEl.style.display = 'none';
   loadMoreEl.style.display = 'none';
   errorBanner.classList.remove('show');
+  if (loadingHideTimer) {
+    clearTimeout(loadingHideTimer);
+    loadingHideTimer = null;
+  }
+  const loadingStartedAt = Date.now();
 
   state.placesData = [];
   state.filtered = [];
@@ -159,6 +173,13 @@ async function loadRestaurants() {
     state.placesData = mergeRestaurants(state.placesData, placesData);
   }
   updateDisplay();
+  const minLoadingMs = 1800;
+  const elapsed = Date.now() - loadingStartedAt;
+  const remaining = Math.max(0, minLoadingMs - elapsed);
+  loadingHideTimer = setTimeout(() => {
+    loadingEl.style.display = 'none';
+    loadingHideTimer = null;
+  }, remaining);
 }
 
 const mapTypes = {
@@ -169,6 +190,7 @@ const mapTypes = {
 };
 
 let currentMapType = 'roadmap';
+let loadingHideTimer = null;
 
 function initMap() {
   if (state.map) return;
@@ -430,7 +452,7 @@ function init() {
   });
 
   document.getElementById('loc-btn').addEventListener('click', () => {
-    showLocationModal(selectLocation);
+    showLocationModal(DEFAULT_LOCATIONS, selectLocation);
   });
   document.getElementById('loc-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) hideLocationModal();
@@ -582,12 +604,17 @@ function init() {
     document.getElementById('detail-view').classList.remove('active');
   });
 
+  document.getElementById('detail-view').addEventListener('click', (e) => {
+    const target = /** @type {HTMLElement} */ (e.target);
+    if (target.closest('#detail-content')) return;
+    if (target.closest('.detail-header button')) return;
+    document.getElementById('detail-view').classList.remove('active');
+  });
+
   document.getElementById('detail-fav').addEventListener('click', () => {
-    const content = document.getElementById('detail-content');
-    const nameEl = content.querySelector('.detail-name');
-    if (!nameEl) return;
-    const name = nameEl.textContent;
-    const r = state.placesData.find(x => x.name === name);
+    const detailView = document.getElementById('detail-view');
+    const detailId = detailView ? detailView.dataset.restaurantId : '';
+    const r = detailId ? state.placesData.find(x => x.id === detailId) : null;
     if (!r) return;
     const added = Store.toggleFav(r.id);
     const favBtn = document.getElementById('detail-fav');

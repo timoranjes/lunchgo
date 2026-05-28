@@ -37,8 +37,28 @@ export function haversine(lat1, lon1, lat2, lon2) {
  * @returns {string} Formatted distance (e.g., "350m", "1.2km") or empty string for invalid input
  */
 export function formatDist(m) {
-  if (m === undefined || m === null || isNaN(m)) return '';
+  if (m === undefined || m === null || !isFinite(m) || isNaN(m)) return '';
   return m < 1000 ? Math.round(m) + 'm' : (m / 1000).toFixed(1) + 'km';
+}
+
+/**
+ * Check whether a restaurant has usable coordinates inside Hong Kong.
+ *
+ * @param {import('./types.js').Restaurant} restaurant - Restaurant object
+ * @returns {boolean} True if coordinates are present and usable on the map
+ */
+export function hasValidCoordinates(restaurant) {
+  if (restaurant.lat === undefined || restaurant.lat === null ||
+      restaurant.lng === undefined || restaurant.lng === null) {
+    return false;
+  }
+
+  const lat = parseFloat(/** @type {string} */ (restaurant.lat));
+  const lng = parseFloat(/** @type {string} */ (restaurant.lng));
+
+  if (!isFinite(lat) || !isFinite(lng)) return false;
+  if (lat === 0 || lng === 0) return false;
+  return !(lat < 22.11 || lat > 22.57 || lng < 113.83 || lng > 114.43);
 }
 
 /**
@@ -185,25 +205,23 @@ export function isValidRestaurant(restaurant) {
   const name = (restaurant.name || '').trim();
   if (name.length < 2) return false;
 
-  if (restaurant.lat === undefined || restaurant.lat === null ||
-      restaurant.lng === undefined || restaurant.lng === null) {
+  const hasLat = restaurant.lat !== undefined && restaurant.lat !== null;
+  const hasLng = restaurant.lng !== undefined && restaurant.lng !== null;
+
+  // Restaurants without coordinates stay visible; they just won't be plotted.
+  if (hasLat !== hasLng) {
     return false;
   }
 
-  const lat = parseFloat(/** @type {string} */ (restaurant.lat));
-  const lng = parseFloat(/** @type {string} */ (restaurant.lng));
-
-  if (!isFinite(lat) || !isFinite(lng)) return false;
-  if (lat === 0 || lng === 0) return false;
-  if (lat < 22.11 || lat > 22.57 || lng < 113.83 || lng > 114.43) return false;
+  if (hasLat && hasLng && !hasValidCoordinates(restaurant)) {
+    return false;
+  }
 
   // Validate rating: must be 0-5 or undefined/null
   if (restaurant.rating !== undefined && restaurant.rating !== null) {
     const rating = typeof restaurant.rating === 'number' ? restaurant.rating : parseFloat(String(restaurant.rating));
     if (!isNaN(rating) && (rating < 0 || rating > 5)) return false;
   }
-
-  if (restaurant.source === 'fehd') return false;
 
   return true;
 }

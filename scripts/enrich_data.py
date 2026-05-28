@@ -81,7 +81,7 @@ FIELDS: List[str] = [
     'id', 'name', 'name_en', 'lat', 'lng', 'address',
     'district', 'district_tc', 'licence_type', 'expiry',
     'cuisine', 'phone', 'website', 'opening_hours',
-    'amenity', 'source',
+    'amenity', 'source', 'location_status',
 ]
 
 FehdRecord = Dict[str, Any]
@@ -269,15 +269,22 @@ def parse_osm_element(elem: OsmElement) -> Optional[ParsedOsmPlace]:
         return None
 
     center: Optional[Dict[str, float]] = elem.get('center')
-    lat_raw: Optional[float] = elem.get('lat') or (center or {}).get('lat')
-    lng_raw: Optional[float] = elem.get('lon') or (center or {}).get('lon')
-    if not lat_raw or not lng_raw:
+    lat_raw: Optional[float] = (
+        elem.get('lat') if elem.get('lat') is not None else (center or {}).get('lat')
+    )
+    lng_raw: Optional[float] = (
+        elem.get('lon') if elem.get('lon') is not None else (center or {}).get('lon')
+    )
+    if lat_raw is None or lng_raw is None:
         return None
 
     try:
         lat = float(lat_raw)
         lng = float(lng_raw)
     except (ValueError, TypeError):
+        return None
+
+    if lat == 0 or lng == 0:
         return None
 
     return {
@@ -296,6 +303,7 @@ def parse_osm_element(elem: OsmElement) -> Optional[ParsedOsmPlace]:
         ),
         'opening_hours': tags.get('opening_hours', ''),
         'amenity': tags.get('amenity', 'restaurant'),
+        'location_status': 'exact',
     }
 
 
@@ -437,6 +445,7 @@ def merge(
                 'website': best_match.get('website', ''),
                 'opening_hours': best_match.get('opening_hours', ''),
                 'amenity': best_match.get('amenity', 'restaurant'),
+                'location_status': 'exact',
                 'source': 'fehd+osm',
             })
         else:
@@ -465,6 +474,7 @@ def merge(
                 'website': '',
                 'opening_hours': '',
                 'amenity': 'restaurant',
+                'location_status': 'missing',
                 'source': 'fehd',
             })
 
@@ -493,6 +503,7 @@ def merge(
                 'website': p.get('website', ''),
                 'opening_hours': p.get('opening_hours', ''),
                 'amenity': p.get('amenity', 'restaurant'),
+                'location_status': p.get('location_status', 'exact'),
                 'source': 'osm',
             })
 
@@ -523,6 +534,7 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
     total_with_cuisine = 0
     total_with_phone = 0
     total_with_hours = 0
+    status_counts: Dict[str, int] = defaultdict(int)
 
     for district, records in by_district.items():
         safe_name = district.replace('/', '_').replace(' ', '_').lower()
@@ -534,7 +546,7 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
             for f in FIELDS:
                 val = r.get(f, '')
                 if val is None:
-                    val = 0 if f in ('lat', 'lng') else ''
+                    val = None if f in ('lat', 'lng') else ''
                 row.append(val)
             rows.append(row)
             if r.get('cuisine'):
@@ -543,6 +555,7 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
                 total_with_phone += 1
             if r.get('opening_hours'):
                 total_with_hours += 1
+            status_counts[str(r.get('location_status', 'missing'))] += 1
 
         chunk: Dict[str, Any] = {
             'v': 3,
@@ -566,6 +579,12 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
 
     index_path = os.path.join(DATA_DIR, 'district_index.json')
     with open(index_path, 'w', encoding='utf-8') as f:
+        index['stats'] = {
+            'with_cuisine': total_with_cuisine,
+            'with_phone': total_with_phone,
+            'with_hours': total_with_hours,
+            'location_status': dict(status_counts),
+        }
         json.dump(index, f, ensure_ascii=False, indent=2)
 
     total = len(restaurants)

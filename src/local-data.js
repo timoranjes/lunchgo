@@ -11,7 +11,7 @@
  * @module local-data
  */
 
-import { haversine } from './utils.js';
+import { haversine, hasValidCoordinates } from './utils.js';
 
 /** @typedef {import('./types.js').Restaurant} Restaurant */
 /** @typedef {import('./types.js').DistrictIndex} DistrictIndex */
@@ -135,17 +135,18 @@ export async function loadNearbyDistricts(loc, radiusKm = 10) {
   const centroids = await Promise.all(
     districtNames.map(async (name) => {
       const restaurants = await loadDistrictData(name);
-      if (restaurants.length === 0) return { name, lat: 0, lng: 0, count: 0 };
+      const valid = restaurants.filter(hasValidCoordinates);
+      if (valid.length === 0) return { name, lat: 0, lng: 0, count: 0 };
       let sumLat = 0, sumLng = 0;
-      for (const r of restaurants) {
+      for (const r of valid) {
         sumLat += parseFloat(r.lat);
         sumLng += parseFloat(r.lng);
       }
       return {
         name,
-        lat: sumLat / restaurants.length,
-        lng: sumLng / restaurants.length,
-        count: restaurants.length,
+        lat: sumLat / valid.length,
+        lng: sumLng / valid.length,
+        count: valid.length,
       };
     })
   );
@@ -215,13 +216,22 @@ export function parseCompactRecord(row, fields) {
               (typeof rawLat === 'number' ? rawLat : parseFloat(String(rawLat)));
   const lng = (rawLng === null || rawLng === undefined) ? null :
               (typeof rawLng === 'number' ? rawLng : parseFloat(String(rawLng)));
+  const normalizedLat = (lat === null || !isFinite(lat) || lat === 0) ? null : lat;
+  const normalizedLng = (lng === null || !isFinite(lng) || lng === 0) ? null : lng;
+  const explicitStatus = String(obj.location_status || obj.locationStatus || '').trim();
+  const inferredStatus = explicitStatus || (
+    normalizedLat === null || normalizedLng === null ? 'missing' :
+    inferredSource === 'fehd'
+      ? 'approximate'
+      : 'exact'
+  );
 
   return {
     id: id,
     name: String(obj.name || ''),
     name_en: String(obj.name_en || obj.name || ''),
-    lat: lat,
-    lng: lng,
+    lat: normalizedLat,
+    lng: normalizedLng,
     address: String(obj.address || ''),
     rating: 0,
     user_ratings_total: 0,
@@ -238,6 +248,7 @@ export function parseCompactRecord(row, fields) {
     licence_type: String(obj.licence_type || ''),
     expiry: String(obj.expiry || ''),
     endorsements: Array.isArray(obj.endorsements) ? obj.endorsements : [],
+    location_status: inferredStatus,
   };
 }
 

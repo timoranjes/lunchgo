@@ -24,6 +24,7 @@ import {
   haversine,
   formatDist,
   isValidRestaurant,
+  hasValidCoordinates,
   renderStars,
   priceLevel,
   escHtml,
@@ -95,6 +96,52 @@ export const CUISINES = [
   { id: 'dessert', label: '甜品' },
 ];
 
+function getRestaurantDistance(restaurant, location) {
+  if (!location || !hasValidCoordinates(restaurant)) return undefined;
+  const lat = parseFloat(/** @type {string} */ (restaurant.lat));
+  const lng = parseFloat(/** @type {string} */ (restaurant.lng));
+  if (!isFinite(lat) || !isFinite(lng)) return undefined;
+  return haversine(location.lat, location.lng, lat, lng);
+}
+
+function getDistanceSortValue(distance) {
+  return Number.isFinite(distance) ? distance : Infinity;
+}
+
+function updateFavoriteButtonState(button, restaurantId) {
+  const isFav = Store.isFav(restaurantId);
+  button.textContent = isFav ? '♥' : '♡';
+  button.classList.toggle('is-fav', isFav);
+}
+
+function bindFavoriteButton(button, restaurantId) {
+  updateFavoriteButtonState(button, restaurantId);
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const added = Store.toggleFav(restaurantId);
+    updateFavoriteButtonState(button, restaurantId);
+    if (document.getElementById('fav-page')?.classList.contains('active')) {
+      renderFavorites();
+    }
+    if (_callbacks.onShowToast) {
+      _callbacks.onShowToast(added ? '已收藏' : '已取消收藏');
+    }
+  });
+}
+
+function bindRestaurantCardInteractions(card, restaurant) {
+  card.addEventListener('click', () => {
+    if (_callbacks.onCardClick) {
+      _callbacks.onCardClick(card.dataset.id);
+    }
+  });
+
+  const favButton = card.querySelector('.rest-fav');
+  if (favButton) {
+    bindFavoriteButton(/** @type {HTMLButtonElement} */ (favButton), restaurant.id);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Template Functions
 // ---------------------------------------------------------------------------
@@ -128,10 +175,14 @@ export function renderSkeletonCards(count) {
  * @returns {string} HTML string
  */
 export function renderCardTemplate(r) {
-  const dist = r.distance ? formatDist(r.distance) : '';
+  const dist = Number.isFinite(r.distance) ? formatDist(r.distance) : '';
   const district = r.district_tc || r.district || '';
   const stars = r.rating ? renderStars(r.rating) : '';
   const price = r.price_level ? priceLevel(r.price_level) : '';
+  const locationStatus =
+    r.location_status === 'approximate' ? '座標約略' :
+    r.location_status === 'missing' ? '未標示位置' : '';
+  const favText = Store.isFav(r.id) ? '♥' : '♡';
 
   let thumbHtml = '<div class="rest-card-thumb">';
   if (r.photos && r.photos.length > 0) {
@@ -144,6 +195,7 @@ export function renderCardTemplate(r) {
 
   let tags = '';
   if (district) tags += '<span class="tag tag-district">' + escHtml(district) + '</span>';
+  if (locationStatus) tags += '<span class="tag tag-status">' + escHtml(locationStatus) + '</span>';
   if (dist) tags += '<span class="tag tag-distance">' + escHtml(dist) + '</span>';
   if (r.cuisine)
     tags += '<span class="tag tag-cuisine">' + escHtml(r.cuisine.split(',')[0]) + '</span>';
@@ -153,6 +205,11 @@ export function renderCardTemplate(r) {
     '<div class="rest-card" data-id="' +
     escAttr(r.id) +
     '">' +
+    '<button class="rest-fav" type="button" aria-label="' +
+    escAttr(Store.isFav(r.id) ? '取消收藏' : '收藏') +
+    '">' +
+    favText +
+    '</button>' +
     '<div class="rest-card-top">' +
     thumbHtml +
     '<div class="rest-card-body">' +
@@ -195,7 +252,7 @@ export function renderCardTemplate(r) {
  * @returns {string} HTML string
  */
 export function renderDiscoveryCardTemplate(r) {
-  const dist = r.distance ? formatDist(r.distance) : '';
+  const dist = Number.isFinite(r.distance) ? formatDist(r.distance) : '';
   let imgHtml = '';
   if (r.photos && r.photos.length > 0) {
     imgHtml =
@@ -244,6 +301,10 @@ export function renderFavCardTemplate(r, dist) {
   const district = r.district_tc || r.district || '';
   const stars = r.rating ? renderStars(r.rating) : '';
   const price = r.price_level ? priceLevel(r.price_level) : '';
+  const locationStatus =
+    r.location_status === 'approximate' ? '座標約略' :
+    r.location_status === 'missing' ? '未標示位置' : '';
+  const favText = Store.isFav(r.id) ? '♥' : '♡';
 
   let thumbHtml = '<div class="rest-card-thumb">';
   if (r.photos && r.photos.length > 0) {
@@ -256,6 +317,7 @@ export function renderFavCardTemplate(r, dist) {
 
   let tags = '';
   if (district) tags += '<span class="tag tag-district">' + escHtml(district) + '</span>';
+  if (locationStatus) tags += '<span class="tag tag-status">' + escHtml(locationStatus) + '</span>';
   if (dist) tags += '<span class="tag tag-distance">' + escHtml(dist) + '</span>';
   if (r.cuisine)
     tags += '<span class="tag tag-cuisine">' + escHtml(r.cuisine.split(',')[0]) + '</span>';
@@ -264,6 +326,11 @@ export function renderFavCardTemplate(r, dist) {
     '<div class="rest-card" data-id="' +
     escAttr(r.id) +
     '">' +
+    '<button class="rest-fav" type="button" aria-label="' +
+    escAttr(Store.isFav(r.id) ? '取消收藏' : '收藏') +
+    '">' +
+    favText +
+    '</button>' +
     '<div class="rest-card-top">' +
     thumbHtml +
     '<div class="rest-card-body">' +
@@ -305,6 +372,7 @@ export function renderFavCardTemplate(r, dist) {
 
 /** @type {IntersectionObserver|null} */
 let _loadMoreObserver = null;
+let _renderVersion = 0;
 
 /**
  * Set up IntersectionObserver for infinite scroll lazy loading.
@@ -362,6 +430,7 @@ export function teardownLazyLoading() {
  */
 export function updateDisplay(reset) {
   if (reset === undefined) reset = true;
+  const renderVersion = ++_renderVersion;
 
   let list = state.placesData;
 
@@ -394,18 +463,13 @@ export function updateDisplay(reset) {
   if (loc) {
     list = list.map((r) => ({
       ...r,
-      distance: haversine(
-        loc.lat,
-        loc.lng,
-        parseFloat(/** @type {string} */ (r.lat)),
-        parseFloat(/** @type {string} */ (r.lng))
-      ),
+      distance: getRestaurantDistance(r, loc),
     }));
   }
 
   switch (state.currentSort) {
     case 'distance':
-      list.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      list.sort((a, b) => getDistanceSortValue(a.distance) - getDistanceSortValue(b.distance));
       break;
     case 'rating':
       list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
@@ -418,7 +482,7 @@ export function updateDisplay(reset) {
         const da = a.district_tc || a.district || '\uffff';
         const db = b.district_tc || b.district || '\uffff';
         const cmp = da.localeCompare(db, 'zh-Hant');
-        return cmp !== 0 ? cmp : (a.distance || 0) - (b.distance || 0);
+        return cmp !== 0 ? cmp : getDistanceSortValue(a.distance) - getDistanceSortValue(b.distance);
       });
       break;
   }
@@ -428,7 +492,7 @@ export function updateDisplay(reset) {
   const total = list.length;
   const resultCountEl = document.getElementById('result-count');
   if (resultCountEl) {
-    resultCountEl.textContent = total + ' 家餐廳';
+    resultCountEl.textContent = total + ' 間餐廳';
   }
 
   if (reset) {
@@ -440,13 +504,11 @@ export function updateDisplay(reset) {
     : (cb) => setTimeout(cb, 16);
 
   scheduleRender(() => {
+    if (renderVersion !== _renderVersion) return;
     renderDiscovery(list);
     renderList(list);
     if (state.map) renderMapMarkers(list);
   });
-
-  const loadingEl = document.getElementById('loading-state');
-  if (loadingEl) loadingEl.style.display = 'none';
 
   const emptyEl = document.getElementById('empty-state');
   if (emptyEl) {
@@ -545,11 +607,7 @@ export function renderList(list) {
     temp.innerHTML = renderCardTemplate(r);
     const card = temp.firstElementChild;
     if (card) {
-      card.addEventListener('click', () => {
-        if (_callbacks.onCardClick) {
-          _callbacks.onCardClick(/** @type {HTMLElement} */ (card).dataset.id);
-        }
-      });
+      bindRestaurantCardInteractions(/** @type {HTMLElement} */ (card), r);
       fragment.appendChild(card);
     }
   });
@@ -589,11 +647,7 @@ export function loadMoreRestaurants(list) {
     temp.innerHTML = renderCardTemplate(r);
     const card = temp.firstElementChild;
     if (card) {
-      card.addEventListener('click', () => {
-        if (_callbacks.onCardClick) {
-          _callbacks.onCardClick(/** @type {HTMLElement} */ (card).dataset.id);
-        }
-      });
+      bindRestaurantCardInteractions(/** @type {HTMLElement} */ (card), r);
       fragment.appendChild(card);
     }
   });
@@ -630,22 +684,19 @@ export function renderMapMarkers(list) {
   const bounds = state.map.getBounds();
   const visible = bounds
     ? list.filter((r) => {
-        if (!r.lat || !r.lng) return false;
-        if (!isFinite(parseFloat(String(r.lat))) || !isFinite(parseFloat(String(r.lng)))) return false;
-        try {
-          return bounds.contains({
-            lat: parseFloat(/** @type {string} */ (r.lat)),
-            lng: parseFloat(/** @type {string} */ (r.lng)),
-          });
-        } catch {
-          return false;
-        }
-      })
+          if (!hasValidCoordinates(r)) return false;
+          try {
+            return bounds.contains({
+              lat: parseFloat(/** @type {string} */ (r.lat)),
+              lng: parseFloat(/** @type {string} */ (r.lng)),
+            });
+          } catch {
+            return false;
+          }
+        })
     : list.filter((r) => {
-        if (!r.lat || !r.lng) return false;
-        if (!isFinite(parseFloat(String(r.lat))) || !isFinite(parseFloat(String(r.lng)))) return false;
-        return true;
-      });
+          return hasValidCoordinates(r);
+        });
 
   const display = visible.slice(0, 500);
   display.forEach((r) => {
@@ -697,16 +748,8 @@ export function showDetail(id) {
   closeRandomPick();
 
   const loc = state.currentLocation;
-  const dist = loc
-    ? formatDist(
-        haversine(
-          loc.lat,
-          loc.lng,
-          parseFloat(/** @type {string} */ (r.lat)),
-          parseFloat(/** @type {string} */ (r.lng))
-        )
-      )
-    : '';
+  const hasCoords = hasValidCoordinates(r);
+  const dist = loc && hasCoords ? formatDist(getRestaurantDistance(r, loc)) : '';
   const isFav = Store.isFav(r.id);
 
   const favBtn = document.getElementById('detail-fav');
@@ -776,27 +819,33 @@ export function showDetail(id) {
         '<div class="loading" style="padding:16px;"><div class="loading-spinner"></div></div>' +
         '</div>'
       : '') +
-    '<div class="detail-section">' +
-    '<div class="detail-section-title">位置</div>' +
-    '<div class="detail-map" id="detail-map"></div>' +
-    '</div>' +
-    '<div class="detail-actions">' +
-    "<button class=\"action-btn action-btn-secondary\" onclick=\"window.open('https://maps.google.com/?q=" +
-    encodeURIComponent(r.name || '') +
-    '&query=' +
-    r.lat +
-    ',' +
-    r.lng +
-    "', '_blank')\">Google 地圖</button>" +
-    "<button class=\"action-btn action-btn-primary\" onclick=\"window.open('https://www.google.com/maps/dir/?api=1&destination=" +
-    r.lat +
-    ',' +
-    r.lng +
-    "', '_blank')\">導航</button>" +
-    '</div>';
+    (hasCoords
+      ? '<div class="detail-section">' +
+        '<div class="detail-section-title">位置</div>' +
+        '<div class="detail-map" id="detail-map"></div>' +
+        '</div>' +
+        '<div class="detail-actions">' +
+        "<button class=\"action-btn action-btn-secondary\" onclick=\"window.open('https://maps.google.com/?q=" +
+        encodeURIComponent(r.name || '') +
+        '&query=' +
+        parseFloat(/** @type {string} */ (r.lat)) +
+        ',' +
+        parseFloat(/** @type {string} */ (r.lng)) +
+        "', '_blank')\">Google 地圖</button>" +
+        "<button class=\"action-btn action-btn-primary\" onclick=\"window.open('https://www.google.com/maps/dir/?api=1&destination=" +
+        parseFloat(/** @type {string} */ (r.lat)) +
+        ',' +
+        parseFloat(/** @type {string} */ (r.lng)) +
+        "', '_blank')\">導航</button>" +
+        '</div>'
+      : '<div class="detail-section">' +
+        '<div class="detail-section-title">位置</div>' +
+        '<div class="detail-address">暫無座標資料</div>' +
+        '</div>');
 
   const detailView = document.getElementById('detail-view');
   if (detailView) {
+    detailView.dataset.restaurantId = r.id;
     detailView.classList.add('active');
   }
 
@@ -855,6 +904,7 @@ export function showDetail(id) {
   }
 
   setTimeout(() => {
+    if (!hasCoords) return;
     const mapEl = document.getElementById('detail-map');
     if (mapEl && !mapEl.dataset.init && typeof google !== 'undefined') {
       mapEl.dataset.init = '1';
@@ -1130,6 +1180,7 @@ export function renderFavorites() {
     temp.innerHTML = renderFavCardTemplate(r, dist);
     const card = temp.firstElementChild;
     if (card) {
+      bindRestaurantCardInteractions(/** @type {HTMLElement} */ (card), r);
       card.addEventListener('click', () => {
         if (_callbacks.onHideFavoritesPage) {
           _callbacks.onHideFavoritesPage();
@@ -1162,10 +1213,48 @@ export function setFavSortMode(mode) {
 /**
  * Show the location selection modal.
  *
- * @param {function(Object): void} onSelectLocation - Callback when a location is selected
+ * @param {Array<Object>|function(Object): void} defaultLocationsOrCallback - Default locations array or callback
+ * @param {function(Object): void} [maybeOnSelectLocation] - Callback when a location is selected
  */
-export function showLocationModal(onSelectLocation) {
+export function showLocationModal(defaultLocationsOrCallback, maybeOnSelectLocation) {
+  const defaultLocations = Array.isArray(defaultLocationsOrCallback) ? defaultLocationsOrCallback : [];
+  const onSelectLocation = Array.isArray(defaultLocationsOrCallback)
+    ? maybeOnSelectLocation
+    : /** @type {function(Object): void} */ (defaultLocationsOrCallback);
   const customLocs = Store.getCustomLocations();
+
+  const defaultContainer = document.getElementById('loc-list');
+  if (defaultContainer) {
+    if (defaultLocations.length === 0) {
+      defaultContainer.innerHTML = '';
+    } else {
+      defaultContainer.innerHTML = defaultLocations
+        .map((loc) => {
+          const isCurrent = state.currentLocation && state.currentLocation.id === loc.id;
+          return (
+            '<div class="loc-item" data-location-id="' +
+            escAttr(loc.id) +
+            '">' +
+            '<div style="display:flex;align-items:center;flex:1;min-width:0;">' +
+            '<div style="margin-right:8px;width:8px;height:8px;border-radius:50%;background:var(--brand);flex-shrink:0;"></div>' +
+            '<div><div class="loc-item-name">' +
+            escHtml(loc.label) +
+            '</div></div>' +
+            '</div>' +
+            (isCurrent ? '<span style="color:var(--brand);">目前</span>' : '') +
+            '</div>'
+          );
+        })
+        .join('');
+
+      defaultContainer.querySelectorAll('.loc-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          const loc = defaultLocations.find((l) => l.id === item.dataset.locationId);
+          if (loc && onSelectLocation) onSelectLocation(loc);
+        });
+      });
+    }
+  }
 
   const customContainer = document.getElementById('custom-loc-list');
   if (customContainer) {

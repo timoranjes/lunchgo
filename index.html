@@ -116,6 +116,7 @@
         <input type="text" id="loc-search-input" placeholder="搜尋地點..." autocomplete="off" />
         <div id="loc-search-results" class="loc-search-results"></div>
       </div>
+      <div id="loc-list" style="margin-bottom:12px;"></div>
       <div style="display:flex;gap:8px;">
         <button class="gps-btn" id="gps-btn" style="flex:1;">使用目前位置 (GPS)</button>
         <button class="gps-btn" id="map-pick-loc-btn" style="flex:1;">在地圖上選點</button>
@@ -181,7 +182,7 @@
   <div class="toast" id="toast"></div>
 
   <!-- Google Maps + Places -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBN_pMA5dYGC70sS4OnoYALDszrTUUpjkM&libraries=places&language=zh-TW&region=HK"></script>
+  <script src="src/google-bootstrap.js"></script>
 
   <script type="module" src="src/app.js"></script>
 </body>

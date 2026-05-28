@@ -205,12 +205,23 @@
 // ---------------------------------------------------------------------------
 
 /**
+ * Aggregate statistics included in the district index manifest.
+ *
+ * @typedef {Object} DistrictIndexStats
+ * @property {number} [with_cuisine] - Count of rows with cuisine data
+ * @property {number} [with_phone] - Count of rows with phone data
+ * @property {number} [with_hours] - Count of rows with opening hours data
+ * @property {Object.<string, number>} [location_status] - Breakdown by location status
+ */
+
+/**
  * District index manifest structure.
  *
  * @typedef {Object} DistrictIndex
  * @property {number} v - Schema version (currently 2)
  * @property {number} total - Total restaurant count across all districts
  * @property {Object.<string, DistrictEntry>} districts - Map of district name to entry
+ * @property {DistrictIndexStats} [stats] - Optional aggregate stats
  */
 
 /**
@@ -238,9 +249,15 @@
  * Position 7:  district_tc (string)
  * Position 8:  licence_type (string)
  * Position 9:  expiry (string, YYYY-MM-DD)
- * Position 10: endorsements (string[])
+ * Position 10: cuisine (string)
+ * Position 11: phone (string)
+ * Position 12: website (string)
+ * Position 13: opening_hours (string)
+ * Position 14: amenity (string)
+ * Position 15: source (string)
+ * Position 16: location_status (string)
  *
- * @typedef {Array<string|number>} DistrictRow
+ * @typedef {Array<string|number|null>} DistrictRow
  */
 
 /**

@@ -97,5 +97,14 @@
       "count": 563,
       "url": "data/district_wong_tai_sin.json"
     }
+  },
+  "stats": {
+    "with_cuisine": 3785,
+    "with_phone": 990,
+    "with_hours": 1082,
+    "location_status": {
+      "missing": 14325,
+      "exact": 6127
+    }
   }
 }
