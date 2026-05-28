@@ -1,6 +1,6 @@
 {
   "v": 3,
-  "total": 20427,
+  "total": 20452,
   "districts": {
     "Southern": {
       "file": "data/district_southern.json",
@@ -14,17 +14,17 @@
     },
     "Central/Western": {
       "file": "data/district_central_western.json",
-      "count": 1999,
+      "count": 2001,
       "url": "data/district_central_western.json"
     },
     "Kowloon City": {
       "file": "data/district_kowloon_city.json",
-      "count": 1117,
+      "count": 1121,
       "url": "data/district_kowloon_city.json"
     },
     "Yuen Long": {
       "file": "data/district_yuen_long.json",
-      "count": 1946,
+      "count": 1949,
       "url": "data/district_yuen_long.json"
     },
     "North": {
@@ -44,42 +44,42 @@
     },
     "Mong Kok": {
       "file": "data/district_mong_kok.json",
-      "count": 1391,
+      "count": 1389,
       "url": "data/district_mong_kok.json"
     },
     "Sha Tin": {
       "file": "data/district_sha_tin.json",
-      "count": 1007,
+      "count": 1009,
       "url": "data/district_sha_tin.json"
     },
     "Yau Tsim": {
       "file": "data/district_yau_tsim.json",
-      "count": 2135,
+      "count": 2137,
       "url": "data/district_yau_tsim.json"
     },
     "Sham Shui Po": {
       "file": "data/district_sham_shui_po.json",
-      "count": 1096,
+      "count": 1099,
       "url": "data/district_sham_shui_po.json"
     },
     "Wan Chai": {
       "file": "data/district_wan_chai.json",
-      "count": 2003,
+      "count": 2005,
       "url": "data/district_wan_chai.json"
     },
     "Tsuen Wan": {
       "file": "data/district_tsuen_wan.json",
-      "count": 832,
+      "count": 834,
       "url": "data/district_tsuen_wan.json"
     },
     "Kwai Tsing": {
       "file": "data/district_kwai_tsing.json",
-      "count": 551,
+      "count": 552,
       "url": "data/district_kwai_tsing.json"
     },
     "Sai Kung": {
       "file": "data/district_sai_kung.json",
-      "count": 638,
+      "count": 639,
       "url": "data/district_sai_kung.json"
     },
     "Kwun Tong": {
@@ -89,12 +89,12 @@
     },
     "Islands": {
       "file": "data/district_islands.json",
-      "count": 642,
+      "count": 644,
       "url": "data/district_islands.json"
     },
     "Wong Tai Sin": {
       "file": "data/district_wong_tai_sin.json",
-      "count": 560,
+      "count": 563,
       "url": "data/district_wong_tai_sin.json"
     }
   }
