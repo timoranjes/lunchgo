@@ -40,6 +40,25 @@ const DEFAULT_LOCATIONS = [
   { id: 'quarry_bay', label: '鰂魚涌', lat: 22.2855, lng: 114.2158 },
 ];
 
+function hasGoogleMaps() {
+  return typeof window !== 'undefined' && typeof window.google !== 'undefined' && !!window.google.maps;
+}
+
+function ensureMapsServices() {
+  if (!hasGoogleMaps()) return false;
+
+  if (!state.geocoder) {
+    state.geocoder = new google.maps.Geocoder();
+  }
+
+  if (!state.placesService) {
+    // A detached node is enough for PlacesService initialization.
+    state.placesService = new google.maps.places.PlacesService(document.createElement('div'));
+  }
+
+  return true;
+}
+
 setRenderCallbacks({
   onCardClick: (id) => showDetail(id),
   onShowToast: (msg) => showToast(msg),
@@ -183,10 +202,10 @@ async function loadRestaurants() {
 }
 
 const mapTypes = {
-  roadmap: google.maps.MapTypeId.ROADMAP,
-  satellite: google.maps.MapTypeId.SATELLITE,
-  terrain: google.maps.MapTypeId.TERRAIN,
-  hybrid: google.maps.MapTypeId.HYBRID,
+  roadmap: 'roadmap',
+  satellite: 'satellite',
+  terrain: 'terrain',
+  hybrid: 'hybrid',
 };
 
 let currentMapType = 'roadmap';
@@ -194,6 +213,7 @@ let loadingHideTimer = null;
 
 function initMap() {
   if (state.map) return;
+  if (!ensureMapsServices()) return;
   const loc = state.currentLocation;
   if (!loc) return;
 
@@ -308,6 +328,11 @@ function showToast(msg) {
 }
 
 function setView(view) {
+  if (view === 'map' && !ensureMapsServices()) {
+    showToast('地圖服務暫時不可用');
+    return;
+  }
+
   state.currentView = view;
   document.querySelectorAll('.view-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.view === view);
@@ -382,16 +407,9 @@ function renderPriceBar() {
 }
 
 function init() {
-  if (typeof google === 'undefined' || !google.maps) {
-    const banner = document.getElementById('error-banner');
-    banner.innerHTML = '地圖服務載入失敗，請檢查網路連線' +
-      ' <button id="error-retry-btn" style="margin-left:8px;padding:2px 8px;border:1px solid currentColor;border-radius:4px;background:transparent;cursor:pointer;font-size:12px;">重試</button>';
-    banner.classList.add('show');
-    document.getElementById('error-retry-btn').addEventListener('click', () => {
-      window.location.reload();
-    });
-    document.getElementById('loading-state').style.display = 'none';
-    return;
+  const mapsAvailable = hasGoogleMaps();
+  if (!mapsAvailable) {
+    console.warn('[LunchGo] Google Maps unavailable at startup; continuing with local data only.');
   }
 
   let loc = Store.getLocation();
@@ -402,11 +420,9 @@ function init() {
   state.currentLocation = loc;
   state.currentLocationLabel = loc.label;
 
-  state.geocoder = new google.maps.Geocoder();
-
-  // Initialize PlacesService early so list view can load data without map being visible.
-  // PlacesService accepts any HTMLElement; we use a detached div to avoid needing a visible map.
-  state.placesService = new google.maps.places.PlacesService(document.createElement('div'));
+  if (mapsAvailable) {
+    ensureMapsServices();
+  }
 
   document.getElementById('loc-btn').textContent = loc.label;
 
@@ -460,7 +476,7 @@ function init() {
   document.getElementById('gps-btn').addEventListener('click', useGPS);
 
   const locSearchInput = document.getElementById('loc-search-input');
-  if (locSearchInput && typeof google !== 'undefined') {
+  if (locSearchInput && mapsAvailable) {
     const autocomplete = new google.maps.places.Autocomplete(locSearchInput, {
       types: ['geocode'],
       componentRestrictions: { country: 'hk' },
@@ -479,6 +495,10 @@ function init() {
   }
 
   document.getElementById('map-pick-loc-btn').addEventListener('click', () => {
+    if (!ensureMapsServices()) {
+      showToast('地圖服務暫時不可用');
+      return;
+    }
     hideLocationModal();
     setView('map');
     showToast('點擊地圖選擇位置');
@@ -567,6 +587,10 @@ function init() {
   });
 
   document.getElementById('custom-loc-map').addEventListener('click', () => {
+    if (!ensureMapsServices()) {
+      showToast('地圖服務暫時不可用');
+      return;
+    }
     document.getElementById('add-loc-modal').classList.remove('active');
     setView('map');
 
