@@ -9,11 +9,16 @@
 
 import Store from './store.js';
 import { state } from './state.js';
-import { loadPlacesData as loadPlacesDataApi, fetchPlaceDetailsLegacy, fetchPhotosForTopRestaurantsLegacy } from './api.js';
+import {
+  loadPlacesData as loadPlacesDataApi,
+  fetchPlaceDetailsLegacy,
+  fetchRestaurantEnrichmentLegacy,
+} from './api.js';
 import {
   updateDisplay,
   renderMapMarkers,
   showDetail,
+  patchRestaurantCard,
   openRandomPick,
   closeRandomPick,
   rerollRandom,
@@ -39,6 +44,132 @@ const DEFAULT_LOCATIONS = [
   { id: 'tsim_sha_tsui', label: '尖沙咀', lat: 22.2977, lng: 114.1728 },
   { id: 'quarry_bay', label: '鰂魚涌', lat: 22.2855, lng: 114.2158 },
 ];
+
+const ENRICHMENT_QUEUE_CONCURRENCY = 1;
+const ENRICHMENT_QUEUE_DELAY_MS = 120;
+
+const enrichmentQueueState = {
+  pending: new Set(),
+  active: 0,
+  lastRun: 0,
+  currentDetailId: '',
+};
+
+function markRestaurantEnrichment(restaurant, status, extra = {}) {
+  if (!restaurant) return;
+  restaurant.enrichment_status = status;
+  restaurant.enrichment_error = extra.error || '';
+  if (extra.photos) restaurant.photos = extra.photos;
+  if (extra.photo_refs) restaurant.photo_refs = extra.photo_refs;
+  if (extra.address) restaurant.address = extra.address;
+  if (extra.phone) restaurant.phone = extra.phone;
+  if (extra.website) restaurant.website = extra.website;
+  if (extra.opening_hours) restaurant.opening_hours = extra.opening_hours;
+  if (extra.rating !== undefined) restaurant.rating = extra.rating;
+  if (extra.user_ratings_total !== undefined) restaurant.user_ratings_total = extra.user_ratings_total;
+  if (extra.price_level !== undefined) restaurant.price_level = extra.price_level;
+  patchRestaurantCard(restaurant);
+}
+
+function applyRestaurantEnrichmentUpdate(restaurant, payload) {
+  if (!restaurant) return;
+  if (payload && payload.details) {
+    restaurant.enrichment_status = 'ready';
+  } else if (payload && payload.status === 'failed') {
+    restaurant.enrichment_status = 'failed';
+  }
+}
+
+function scheduleQueuePump() {
+  if (enrichmentQueueState.active >= ENRICHMENT_QUEUE_CONCURRENCY) return;
+  const now = Date.now();
+  const wait = Math.max(0, ENRICHMENT_QUEUE_DELAY_MS - (now - enrichmentQueueState.lastRun));
+  setTimeout(pumpEnrichmentQueue, wait);
+}
+
+function queueVisibleRestaurantEnrichment(restaurants) {
+  if (!Array.isArray(restaurants) || restaurants.length === 0) return;
+  for (const restaurant of restaurants) {
+    if (!restaurant || !restaurant.id) continue;
+    if (restaurant.enrichment_status === 'ready' || restaurant.enrichment_status === 'loading' || restaurant.enrichment_status === 'failed') continue;
+    enrichmentQueueState.pending.add(restaurant.id);
+    if (!restaurant.enrichment_status) {
+      restaurant.enrichment_status = 'pending';
+    }
+  }
+  scheduleQueuePump();
+}
+
+async function pumpEnrichmentQueue() {
+  if (enrichmentQueueState.active >= ENRICHMENT_QUEUE_CONCURRENCY) return;
+  if (!state.placesService) return;
+
+  const nextId = enrichmentQueueState.currentDetailId || enrichmentQueueState.pending.values().next().value;
+  if (!nextId) return;
+  enrichmentQueueState.pending.delete(nextId);
+
+  const restaurant = state.placesData.find((r) => r.id === nextId);
+  if (!restaurant) {
+    scheduleQueuePump();
+    return;
+  }
+
+  enrichmentQueueState.active += 1;
+  enrichmentQueueState.lastRun = Date.now();
+  markRestaurantEnrichment(restaurant, 'loading');
+
+  try {
+    const result = await new Promise((resolve) => {
+      fetchRestaurantEnrichmentLegacy(state, restaurant, (_updated, payload) => resolve(payload), {
+        forceRefresh: false,
+      });
+    });
+
+    applyRestaurantEnrichmentUpdate(restaurant, result);
+
+    if (result && result.details) {
+      markRestaurantEnrichment(restaurant, 'ready', {
+        photos: restaurant.photos,
+        photo_refs: restaurant.photo_refs,
+        address: restaurant.address,
+        phone: restaurant.phone,
+        website: restaurant.website,
+        opening_hours: restaurant.opening_hours,
+        rating: restaurant.rating,
+        user_ratings_total: restaurant.user_ratings_total,
+        price_level: restaurant.price_level,
+      });
+    } else {
+      markRestaurantEnrichment(restaurant, 'failed', {
+        error: result?.error?.message || '暫時無法補充資料',
+      });
+    }
+
+    if (enrichmentQueueState.currentDetailId === restaurant.id) {
+      showDetail(restaurant.id);
+    }
+  } finally {
+    enrichmentQueueState.active -= 1;
+    if (enrichmentQueueState.pending.size > 0) {
+      scheduleQueuePump();
+    }
+  }
+}
+
+function refreshVisibleEnrichmentQueue() {
+  if (!state.filtered || state.filtered.length === 0) return;
+  const container = document.getElementById('rest-list');
+  if (!container) return;
+  const visibleIds = new Set(
+    Array.from(container.querySelectorAll('.rest-card')).map((card) => card.dataset.id).filter(Boolean)
+  );
+  for (const restaurant of state.filtered) {
+    if (!visibleIds.has(restaurant.id)) continue;
+    if (restaurant.enrichment_status === 'ready' || restaurant.enrichment_status === 'loading' || restaurant.enrichment_status === 'failed') continue;
+    enrichmentQueueState.pending.add(restaurant.id);
+  }
+  scheduleQueuePump();
+}
 
 function hasGoogleMaps() {
   return typeof window !== 'undefined' && typeof window.google !== 'undefined' && !!window.google.maps;
@@ -86,9 +217,14 @@ function setupGoogleEnhancements() {
 }
 
 setRenderCallbacks({
-  onCardClick: (id) => showDetail(id),
+  onCardClick: (id) => {
+    setDetailEnrichmentTarget(id);
+    showDetail(id);
+  },
   onShowToast: (msg) => showToast(msg),
   onFetchPlaceDetails: (placeId, callback) => fetchPlaceDetails(placeId, callback),
+  onFetchRestaurantEnrichment: (restaurant, callback) => fetchRestaurantEnrichment(state, restaurant, callback),
+  onVisibleRestaurantsRendered: (restaurants) => queueVisibleRestaurantEnrichment(restaurants),
   onHideFavoritesPage: () => hideFavoritesPage(),
 });
 
@@ -120,13 +256,6 @@ async function loadPlacesData(loc) {
     console.error('[LunchGo] Places nearbySearch failed:', error.message);
     return [];
   }
-
-  const topPlaces = restaurants;
-  await new Promise((resolve) => {
-    fetchPhotosForTopRestaurantsLegacy(topPlaces, { placesService: state.placesService }, () => {
-      resolve();
-    });
-  });
 
   state.placesLoaded = true;
   return restaurants;
@@ -169,14 +298,25 @@ function showErrorBanner(errorMsg) {
   setTimeout(() => banner.classList.remove('show'), 8000);
 }
 
-function fetchPhotosForTopRestaurants(places) {
-  fetchPhotosForTopRestaurantsLegacy(places, state, () => {
-    updateDisplay();
+function fetchPlaceDetails(placeId, callback) {
+  fetchPlaceDetailsLegacy(state, placeId, callback);
+}
+
+function fetchRestaurantEnrichment(stateArg, restaurant, callback) {
+  fetchRestaurantEnrichmentLegacy(stateArg, restaurant, (updated, result) => {
+    callback(updated, result);
+    clearDetailEnrichmentTarget(restaurant?.id || '');
   });
 }
 
-function fetchPlaceDetails(placeId, callback) {
-  fetchPlaceDetailsLegacy(state, placeId, callback);
+function setDetailEnrichmentTarget(id) {
+  enrichmentQueueState.currentDetailId = id || '';
+}
+
+function clearDetailEnrichmentTarget(id) {
+  if (!id || enrichmentQueueState.currentDetailId === id) {
+    enrichmentQueueState.currentDetailId = '';
+  }
 }
 
 async function loadRestaurants() {
@@ -209,6 +349,7 @@ async function loadRestaurants() {
     const localData = await loadNearbyDistricts({ lat: loc.lat, lng: loc.lng });
     state.placesData = localData;
     updateDisplay();
+    refreshVisibleEnrichmentQueue();
   } catch (err) {
     console.warn('[LunchGo] Local data load failed, continuing with Places only:', err.message);
   }
@@ -218,6 +359,7 @@ async function loadRestaurants() {
     state.placesData = mergeRestaurants(state.placesData, placesData);
   }
   updateDisplay();
+  refreshVisibleEnrichmentQueue();
   const minLoadingMs = 1800;
   const elapsed = Date.now() - loadingStartedAt;
   const remaining = Math.max(0, minLoadingMs - elapsed);
@@ -637,6 +779,7 @@ function init() {
   });
 
   document.getElementById('detail-back').addEventListener('click', () => {
+    clearDetailEnrichmentTarget(document.getElementById('detail-view')?.dataset.restaurantId || '');
     document.getElementById('detail-view').classList.remove('active');
   });
 
@@ -644,6 +787,7 @@ function init() {
     const target = /** @type {HTMLElement} */ (e.target);
     if (target.closest('#detail-content')) return;
     if (target.closest('.detail-header button')) return;
+    clearDetailEnrichmentTarget(document.getElementById('detail-view')?.dataset.restaurantId || '');
     document.getElementById('detail-view').classList.remove('active');
   });
 
@@ -674,6 +818,7 @@ function init() {
   document.getElementById('random-reroll').addEventListener('click', rerollRandom);
   document.getElementById('random-view').addEventListener('click', () => {
     if (state.randomPickResult) {
+      setDetailEnrichmentTarget(state.randomPickResult.id);
       showDetail(state.randomPickResult.id);
     }
   });

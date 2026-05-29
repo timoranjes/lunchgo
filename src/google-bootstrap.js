@@ -47,6 +47,30 @@
     };
   }
 
+  function getStubRegistry() {
+    window.__lunchgoGoogleStub = window.__lunchgoGoogleStub || {
+      nearbySearch: null,
+      textSearch: null,
+      getDetails: null,
+    };
+    return window.__lunchgoGoogleStub;
+  }
+
+  function deliverStubResponse(callback, response, kind) {
+    const payload = kind === 'details'
+      ? (response?.details ?? null)
+      : (response?.results ?? []);
+    const status = response?.status || 'OK';
+    const delayMs = Number.isFinite(response?.delayMs) ? response.delayMs : 0;
+
+    if (delayMs > 0) {
+      setTimeout(() => callback(payload, status), delayMs);
+      return;
+    }
+
+    callback(payload, status);
+  }
+
   class StubMap {
     constructor(el, options = {}) {
       this.el = el;
@@ -129,10 +153,29 @@
     constructor() {}
 
     nearbySearch(request, callback) {
+      const registry = getStubRegistry();
+      if (typeof registry.nearbySearch === 'function') {
+        deliverStubResponse(callback, registry.nearbySearch(request), 'results');
+        return;
+      }
+      callback([], 'ZERO_RESULTS');
+    }
+
+    textSearch(request, callback) {
+      const registry = getStubRegistry();
+      if (typeof registry.textSearch === 'function') {
+        deliverStubResponse(callback, registry.textSearch(request), 'results');
+        return;
+      }
       callback([], 'ZERO_RESULTS');
     }
 
     getDetails(request, callback) {
+      const registry = getStubRegistry();
+      if (typeof registry.getDetails === 'function') {
+        deliverStubResponse(callback, registry.getDetails(request), 'details');
+        return;
+      }
       callback(null, 'ZERO_RESULTS');
     }
   }

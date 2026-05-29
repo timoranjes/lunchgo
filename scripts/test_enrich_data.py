@@ -495,6 +495,46 @@ class TestMergeLogic:
         merged = result[0]
         assert merged['source'] == 'fehd+osm'
 
+    def test_merge_rejects_conflicting_fehd_osm_match(self):
+        fehd_data = {
+            '2297001018': {
+                'name': '粵菜館',
+                'name_tc': '粵菜館',
+                'address': '新界沙田恒安邨恒安邨商場305-306號鋪及鋪前露天位置',
+                'address_tc': '新界沙田恒安邨恒安邨商場305-306號鋪及鋪前露天位置',
+                'district': '97',
+                'type': 'RL',
+                'expdate': '2027-06-30'
+            }
+        }
+
+        osm_elements = [
+            {
+                'id': 4796652881,
+                'type': 'node',
+                'lat': 22.3960933,
+                'lon': 114.1963926,
+                'tags': {
+                    'name': "鍾菜館 Chung's House",
+                    'addr:full': '新界沙田火炭 㘭背灣街 13號',
+                    'amenity': 'restaurant'
+                }
+            }
+        ]
+
+        with patch('enrich_data.geocode_fehd_address', return_value=(22.4167715, 114.2277168)):
+            result = merge(fehd_data, osm_elements)
+
+        assert len(result) == 2
+        fehd_record = next(r for r in result if r['id'] == 'fehd_2297001018')
+        assert fehd_record['source'] == 'fehd'
+        assert fehd_record['location_status'] == 'approximate'
+        assert fehd_record['lat'] == 22.4167715
+        assert fehd_record['lng'] == 114.2277168
+        assert '恒安邨' in fehd_record['address']
+        osm_record = next(r for r in result if r['id'] == 'osm_4796652881')
+        assert osm_record['name'] == "鍾菜館 Chung's House"
+
 
 class TestOutputFormat:
 

@@ -249,6 +249,7 @@ export function parseCompactRecord(row, fields) {
     expiry: String(obj.expiry || ''),
     endorsements: Array.isArray(obj.endorsements) ? obj.endorsements : [],
     location_status: inferredStatus,
+    enrichment_status: inferredSource === 'places' ? 'ready' : 'pending',
   };
 }
 

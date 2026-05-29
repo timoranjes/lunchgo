@@ -47,6 +47,10 @@ const _callbacks = {
   onShowToast: null,
   /** @type {function(string, function): void|null} */
   onFetchPlaceDetails: null,
+  /** @type {function(import('./types.js').Restaurant, function): void|null} */
+  onFetchRestaurantEnrichment: null,
+  /** @type {function(import('./types.js').Restaurant[]): void|null} */
+  onVisibleRestaurantsRendered: null,
   /** @type {function(): void|null} */
   onHideFavoritesPage: null,
 };
@@ -58,12 +62,16 @@ const _callbacks = {
  * @param {function(string): void} [cb.onCardClick] - Called when a restaurant card is clicked
  * @param {function(string): void} [cb.onShowToast] - Called to show a toast message
  * @param {function(string, function): void} [cb.onFetchPlaceDetails] - Called to fetch place details
+ * @param {function(import('./types.js').Restaurant, function): void} [cb.onFetchRestaurantEnrichment] - Called to enrich a restaurant on demand
+ * @param {function(import('./types.js').Restaurant[]): void} [cb.onVisibleRestaurantsRendered] - Called after the list view is rendered
  * @param {function(): void} [cb.onHideFavoritesPage] - Called to hide favorites page
  */
 export function setRenderCallbacks(cb) {
   if (cb.onCardClick) _callbacks.onCardClick = cb.onCardClick;
   if (cb.onShowToast) _callbacks.onShowToast = cb.onShowToast;
   if (cb.onFetchPlaceDetails) _callbacks.onFetchPlaceDetails = cb.onFetchPlaceDetails;
+  if (cb.onFetchRestaurantEnrichment) _callbacks.onFetchRestaurantEnrichment = cb.onFetchRestaurantEnrichment;
+  if (cb.onVisibleRestaurantsRendered) _callbacks.onVisibleRestaurantsRendered = cb.onVisibleRestaurantsRendered;
   if (cb.onHideFavoritesPage) _callbacks.onHideFavoritesPage = cb.onHideFavoritesPage;
 }
 
@@ -142,6 +150,46 @@ function bindRestaurantCardInteractions(card, restaurant) {
   }
 }
 
+/**
+ * Replace an existing list card in place after data changes.
+ *
+ * @param {import('./types.js').Restaurant} restaurant
+ */
+export function patchRestaurantCard(restaurant) {
+  const container = document.getElementById('rest-list');
+  if (!container || !restaurant || !restaurant.id) return;
+
+  const existing = container.querySelector('.rest-card[data-id="' + restaurant.id + '"]');
+  if (!existing) return;
+
+  const temp = document.createElement('div');
+  temp.innerHTML = renderCardTemplate(restaurant);
+  const replacement = temp.firstElementChild;
+  if (!replacement) return;
+
+  bindRestaurantCardInteractions(/** @type {HTMLElement} */ (replacement), restaurant);
+  existing.replaceWith(replacement);
+}
+
+/**
+ * Render a compact loading placeholder for an unenriched card.
+ *
+ * @param {import('./types.js').Restaurant} restaurant
+ * @returns {string}
+ */
+function renderCardLoadingMeta(restaurant) {
+  if (restaurant.enrichment_status === 'loading') {
+    return '<span class="rest-loading-badge">補充資料中</span>';
+  }
+  if (restaurant.enrichment_status === 'failed') {
+    return '<span class="rest-loading-badge rest-loading-badge-error">資料暫缺</span>';
+  }
+  if (!restaurant.enrichment_status || restaurant.enrichment_status === 'pending') {
+    return '<span class="rest-loading-badge">等待補充</span>';
+  }
+  return '';
+}
+
 // ---------------------------------------------------------------------------
 // Template Functions
 // ---------------------------------------------------------------------------
@@ -200,6 +248,9 @@ export function renderCardTemplate(r) {
   if (r.cuisine)
     tags += '<span class="tag tag-cuisine">' + escHtml(r.cuisine.split(',')[0]) + '</span>';
   if (price) tags += '<span class="tag tag-price">' + escHtml(price.trim()) + '</span>';
+  if (!r.photos || r.photos.length === 0) {
+    tags += renderCardLoadingMeta(r);
+  }
 
   return (
     '<div class="rest-card" data-id="' +
@@ -274,6 +325,7 @@ export function renderDiscoveryCardTemplate(r) {
     (dist ? dist + ' · ' : '') +
     (r.price_level ? priceLevel(r.price_level) : '') +
     '</div>' +
+    (!r.rating ? '<div class="discovery-card-placeholder">補充中</div>' : '') +
     '<div class="discovery-card-rating">' +
     '<span class="stars">' +
     renderStars(r.rating) +
@@ -615,6 +667,14 @@ export function renderList(list) {
   container.innerHTML = '';
   container.appendChild(fragment);
 
+  if (_callbacks.onVisibleRestaurantsRendered) {
+    const visibleRestaurants = display.map((r) => {
+      const current = state.placesData.find((x) => x.id === r.id);
+      return current || r;
+    });
+    _callbacks.onVisibleRestaurantsRendered(visibleRestaurants);
+  }
+
   if (loadMoreEl && loadMoreBtn) {
     if (end < list.length) {
       loadMoreBtn.textContent = '載入更多 (' + (list.length - end) + ' 家)';
@@ -652,6 +712,13 @@ export function loadMoreRestaurants(list) {
     }
   });
   container.appendChild(fragment);
+
+  if (_callbacks.onVisibleRestaurantsRendered) {
+    const visibleCards = Array.from(container.querySelectorAll('.rest-card'))
+      .map((card) => state.placesData.find((r) => r.id === card.dataset.id))
+      .filter(Boolean);
+    _callbacks.onVisibleRestaurantsRendered(/** @type {import('./types.js').Restaurant[]} */ (visibleCards));
+  }
 
   if (loadMoreEl && loadMoreBtn) {
     if (end < list.length) {
@@ -758,18 +825,18 @@ export function showDetail(id) {
     favBtn.className = 'detail-fav' + (isFav ? ' is-fav' : '');
   }
 
-  let photosHtml = '';
-  if (r.photos && r.photos.length > 0) {
-    photosHtml =
-      '<div class="detail-photos">' +
+  const content = document.getElementById('detail-content');
+  if (!content) return;
+
+  const photosHtml = r.photos && r.photos.length > 0
+    ? '<div class="detail-photos" id="detail-photos-section">' +
       r.photos
         .map((p) => '<img class="detail-photo" src="' + escAttr(p) + '" alt="" />')
         .join('') +
+      '</div>'
+    : '<div class="detail-section detail-photos detail-photos-placeholder" id="detail-photos-section">' +
+      '<div class="detail-placeholder">補充圖片中</div>' +
       '</div>';
-  }
-
-  const content = document.getElementById('detail-content');
-  if (!content) return;
 
   content.innerHTML =
     '<div class="detail-hero">' +
@@ -813,12 +880,10 @@ export function showDetail(id) {
     escHtml(r.address || '暫無地址資料') +
     '</div>' +
     '</div>' +
-    (r.place_id
-      ? '<div class="detail-section" id="detail-hours-section">' +
-        '<div class="detail-section-title">營業時間</div>' +
-        '<div class="loading" style="padding:16px;"><div class="loading-spinner"></div></div>' +
-        '</div>'
-      : '') +
+    '<div class="detail-section" id="detail-hours-section">' +
+    '<div class="detail-section-title">營業時間</div>' +
+    '<div class="loading" style="padding:16px;"><div class="loading-spinner"></div></div>' +
+    '</div>' +
     (hasCoords
       ? '<div class="detail-section">' +
         '<div class="detail-section-title">位置</div>' +
@@ -849,7 +914,87 @@ export function showDetail(id) {
     detailView.classList.add('active');
   }
 
-  if (r.place_id && _callbacks.onFetchPlaceDetails) {
+  if (_callbacks.onFetchRestaurantEnrichment && r.enrichment_status !== 'ready') {
+    r.enrichment_status = 'loading';
+    _callbacks.onFetchRestaurantEnrichment(r, (updated, result) => {
+      if (!updated) return;
+
+      const photosSection = document.getElementById('detail-photos-section');
+      if (photosSection && updated.photos && updated.photos.length > 0) {
+        photosSection.outerHTML =
+          '<div class="detail-photos" id="detail-photos-section">' +
+          updated.photos
+            .map((p) => '<img class="detail-photo" src="' + escAttr(p) + '" alt="" />')
+            .join('') +
+          '</div>';
+      }
+
+      const section = document.getElementById('detail-hours-section');
+      if (!section) return;
+
+      if (result && result.details) {
+        const details = result.details;
+        const openingHours = details.opening_hours || null;
+        const phone = details.formatted_phone_number || details.phone || '';
+        const website = details.website || '';
+        let hoursHtml = '<div class="detail-section-title">營業時間</div>';
+
+        if (openingHours) {
+          const isOpen = typeof openingHours.isOpen === 'function'
+            ? openingHours.isOpen()
+            : false;
+          hoursHtml +=
+            '<div class="detail-hours">' +
+            '<div class="detail-hours-row">' +
+            '<span class="' +
+            (isOpen ? 'detail-hours-open' : 'detail-hours-closed') +
+            '">' +
+            (isOpen ? '營業中' : '已歇業') +
+            '</span>' +
+            '</div>' +
+            (openingHours.weekday_text || [])
+              .map((w) => {
+                const [day, time] = w.split(': ');
+                return (
+                  '<div class="detail-hours-row">' +
+                  '<span class="detail-hours-day">' +
+                  escHtml(day) +
+                  '</span>' +
+                  '<span class="detail-hours-time">' +
+                  escHtml(time) +
+                  '</span>' +
+                  '</div>'
+                );
+              })
+              .join('') +
+            '</div>';
+        } else {
+          hoursHtml += '<div style="color:var(--text-muted);font-size:13px;">暫無營業時間資料</div>';
+        }
+
+        if (phone) {
+          hoursHtml +=
+            '<div style="margin-top:12px;"><span style="font-weight:500;">電話: </span>' +
+            escHtml(phone) +
+            '</div>';
+        }
+        if (website) {
+          hoursHtml +=
+            '<div style="margin-top:4px;"><span style="font-weight:500;">網站: </span><a href="' +
+            escAttr(website) +
+            '" target="_blank" rel="noopener noreferrer" style="color:var(--brand);">前往網站</a></div>';
+        }
+        section.outerHTML =
+          '<div class="detail-section" id="detail-hours-section">' +
+          hoursHtml +
+          '</div>';
+      } else if (result?.status === 'failed') {
+        section.innerHTML =
+          '<div class="detail-section-title">營業時間</div>' +
+          '<div style="color:var(--text-muted);font-size:13px;">暫無補充資料</div>';
+      }
+    });
+  } else if (r.place_id && _callbacks.onFetchPlaceDetails) {
     _callbacks.onFetchPlaceDetails(r.place_id, (details) => {
       if (!details) return;
       const section = document.getElementById('detail-hours-section');

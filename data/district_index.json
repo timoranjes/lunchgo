@@ -104,7 +104,8 @@
     "with_hours": 1083,
     "location_status": {
       "missing": 14330,
-      "exact": 6130
+      "exact": 6129,
+      "approximate": 1
     }
   }
 }

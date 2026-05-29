@@ -89,6 +89,14 @@ OsmElement = Dict[str, Any]
 ParsedOsmPlace = Dict[str, Any]
 MergedRestaurant = Dict[str, Any]
 
+ADDRESS_STOP_WORDS = {
+    '香港', '新界', '九龍', '港島', '中國', '香港特別行政區', '香港特區',
+    '商場', '商業', '中心', '大廈', '廣場', '樓', '層', '地下', '地庫',
+    '地段', '段', '座', '室', '號', '鋪', '舖', '店', '部分', '部份', '位置',
+    '前', '側', '旁', '對面', '露天', '及', '與', '和', '樓上', '樓下',
+    '街市', '屋苑', '屋邨', '屋村', '村', '邨', '苑', '場', '區', '大樓', '酒店', '飯店',
+}
+
 
 def _retry_with_backoff(
     func: callable,
@@ -333,6 +341,75 @@ def name_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, n1, n2).ratio()
 
 
+def tokenize_address(address: str) -> List[str]:
+    normalized = normalize_name(address)
+    normalized = re.sub(r'[，,。．、;；:：()（）\[\]{}]', ' ', normalized)
+    tokens = re.findall(r'[\u4e00-\u9fff]+|[a-z0-9]+', normalized)
+    result: List[str] = []
+    for token in tokens:
+        token = token.strip()
+        if not token or token in ADDRESS_STOP_WORDS:
+            continue
+        if token.isdigit() or len(token) < 2:
+            continue
+        result.append(token)
+    return list(dict.fromkeys(result))
+
+
+def address_agreement_score(a: str, b: str) -> float:
+    tokens_a = tokenize_address(a)
+    tokens_b = tokenize_address(b)
+    if not tokens_a or not tokens_b:
+        return 0.0
+    set_b = set(tokens_b)
+    overlap = sum(1 for token in tokens_a if token in set_b)
+    return overlap / max(len(tokens_a), len(tokens_b))
+
+
+def address_conflicts(fehd_address: str, candidate_address: str) -> bool:
+    score = address_agreement_score(fehd_address, candidate_address)
+    return score < 0.25 and bool(tokenize_address(fehd_address)) and bool(tokenize_address(candidate_address))
+
+
+def geocode_fehd_address(address: str) -> Optional[Tuple[float, float]]:
+    """Approximate FEHD address geocoding fallback.
+
+    The production pipeline can optionally call a geocoder here. In tests this
+    is patched to return deterministic coordinates; in production a missing
+    implementation should simply return None.
+    """
+    if not address:
+        return None
+
+    query = f'{address} Hong Kong'
+    try:
+        resp = requests.get(
+            'https://nominatim.openstreetmap.org/search',
+            params={
+                'q': query,
+                'format': 'jsonv2',
+                'limit': 1,
+            },
+            headers={
+                'User-Agent': 'LunchGo-Bot/2.0',
+                'Accept': 'application/json',
+            },
+            timeout=20,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        if not payload:
+            return None
+        first = payload[0]
+        lat = first.get('lat')
+        lon = first.get('lon')
+        if lat is None or lon is None:
+            return None
+        return float(lat), float(lon)
+    except Exception:
+        return None
+
+
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     R = 6371
     dlat = math.radians(lat2 - lat1)
@@ -379,9 +456,10 @@ def merge(
     osm_name_index: Dict[str, List[ParsedOsmPlace]] = defaultdict(list)
     for p in osm_places:
         norm = normalize_name(p['name'])
-        if norm and len(norm) > 2:
+        # Keep short but meaningful Chinese names like "金龍" and "大家樂".
+        if norm and len(norm) >= 2:
             osm_name_index[norm].append(p)
-        if p.get('name_en') and len(p['name_en']) > 2:
+        if p.get('name_en') and len(p['name_en']) >= 2:
             osm_name_index[normalize_name(p['name_en'])].append(p)
 
     matched_osm_ids: set = set()
@@ -389,6 +467,7 @@ def merge(
     fehd_matched = 0
     fehd_unmatched = 0
     fehd_empty_name = 0
+    fehd_approximate = 0
 
     for licno, fehd in fehd_data.items():
         dist_code: str = fehd['district']
@@ -398,17 +477,25 @@ def merge(
 
         best_match: Optional[ParsedOsmPlace] = None
         best_score = 0.0
+        fehd_address = fehd.get('address_tc', '') or fehd.get('address', '')
+        fehd_tokens = tokenize_address(fehd_address)
 
         for norm_name in [normalize_name(name_tc), normalize_name(name_en)]:
             if norm_name and norm_name in osm_name_index:
                 for candidate in osm_name_index[norm_name]:
                     score = name_similarity(name_tc, candidate['name'])
                     if score > best_score and candidate['osm_id'] not in matched_osm_ids:
-                        if candidate['_district'] == dist_code or haversine_km(
-                            dist_info['center'][0], dist_info['center'][1],
-                            candidate['lat'], candidate['lng'],
-                        ) < 5:
-                            best_score = score
+                        candidate_address = candidate.get('address', '') or ''
+                        address_score = address_agreement_score(fehd_address, candidate_address)
+                        district_ok = (
+                            candidate['_district'] == dist_code
+                            or haversine_km(
+                                dist_info['center'][0], dist_info['center'][1],
+                                candidate['lat'], candidate['lng'],
+                            ) < 5
+                        )
+                        if district_ok and score >= 0.72 and (address_score >= 0.25 or not fehd_tokens or not tokenize_address(candidate_address)):
+                            best_score = score + address_score * 0.2
                             best_match = candidate
 
         if not best_match and dist_code:
@@ -416,11 +503,18 @@ def merge(
                 if candidate['osm_id'] in matched_osm_ids:
                     continue
                 score = name_similarity(name_tc, candidate['name'])
-                if score > best_score and score > 0.6:
-                    best_score = score
+                candidate_address = candidate.get('address', '') or ''
+                address_score = address_agreement_score(fehd_address, candidate_address)
+                candidate_tokens = tokenize_address(candidate_address)
+                if score > best_score and score >= 0.75 and (
+                    address_score >= 0.3
+                    or not fehd_tokens
+                    or not candidate_tokens
+                ):
+                    best_score = score + address_score * 0.2
                     best_match = candidate
 
-        if best_match and best_score > 0.5:
+        if best_match and best_score > 0.5 and not address_conflicts(fehd_address, best_match.get('address', '')):
             fehd_matched += 1
             matched_osm_ids.add(best_match['osm_id'])
             results.append({
@@ -455,14 +549,18 @@ def merge(
                 fehd_empty_name += 1
                 continue
 
-            fehd_unmatched += 1
+            approx_coords: Optional[Tuple[float, float]] = geocode_fehd_address(fehd_address)
+            if approx_coords is not None:
+                fehd_approximate += 1
+            else:
+                fehd_unmatched += 1
             results.append({
                 'id': f'fehd_{licno}',
                 'name': name_tc or name_en,
                 'name_en': name_en,
-                'lat': None,
-                'lng': None,
-                'address': fehd.get('address_tc', '') or fehd.get('address', ''),
+                'lat': approx_coords[0] if approx_coords else None,
+                'lng': approx_coords[1] if approx_coords else None,
+                'address': fehd_address,
                 'district': dist_info.get('en', dist_code),
                 'district_tc': dist_info.get('tc', ''),
                 'licence_type': LICENCE_TYPES.get(
@@ -474,7 +572,7 @@ def merge(
                 'website': '',
                 'opening_hours': '',
                 'amenity': 'restaurant',
-                'location_status': 'missing',
+                'location_status': 'approximate' if approx_coords else 'missing',
                 'source': 'fehd',
             })
 
@@ -509,6 +607,7 @@ def merge(
 
     logger.info('  FEHD+OSM matched: %d', fehd_matched)
     logger.info('  FEHD-only (no match): %d', fehd_unmatched)
+    logger.info('  FEHD approximate (geocoded): %d', fehd_approximate)
     logger.info('  FEHD empty-name (excluded): %d', fehd_empty_name)
     logger.info('  OSM-only (new places): %d', osm_only)
     logger.info('  Total: %d', len(results))
