@@ -9,7 +9,21 @@
     'https://maps.googleapis.com/maps/api/js?key=AIzaSyBN_pMA5dYGC70sS4OnoYALDszrTUUpjkM&libraries=places&language=zh-TW&region=HK';
 
   if (!isLocal) {
-    document.write('<script src="' + apiSrc + '"><\\/script>');
+    // Avoid document.write() on production hosts.
+    // A parser-inserted script here can swallow the remaining HTML and
+    // prevent the module entrypoint from running. Use a normal async
+    // loader so the app can keep booting even if Google is slow or blocked.
+    const script = document.createElement('script');
+    script.src = apiSrc;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      window.dispatchEvent(new Event('lunchgo:google-maps-ready'));
+    };
+    script.onerror = () => {
+      window.dispatchEvent(new Event('lunchgo:google-maps-failed'));
+    };
+    (document.head || document.documentElement).appendChild(script);
     return;
   }
 

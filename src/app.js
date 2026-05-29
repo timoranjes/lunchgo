@@ -59,6 +59,32 @@ function ensureMapsServices() {
   return true;
 }
 
+function setupGoogleEnhancements() {
+  if (!ensureMapsServices()) return false;
+
+  const locSearchInput = document.getElementById('loc-search-input');
+  if (locSearchInput && !state.autocomplete) {
+    const autocomplete = new google.maps.places.Autocomplete(locSearchInput, {
+      types: ['geocode'],
+      componentRestrictions: { country: 'hk' },
+    });
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace();
+      if (!place.geometry || !place.geometry.location) return;
+      const loc = {
+        id: place.place_id || 'search_' + Date.now(),
+        label: place.name || place.formatted_address || place.geometry.location.toString(),
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng(),
+      };
+      selectLocation(loc);
+    });
+    state.autocomplete = autocomplete;
+  }
+
+  return true;
+}
+
 setRenderCallbacks({
   onCardClick: (id) => showDetail(id),
   onShowToast: (msg) => showToast(msg),
@@ -422,6 +448,11 @@ function init() {
 
   if (mapsAvailable) {
     ensureMapsServices();
+    setupGoogleEnhancements();
+  } else {
+    window.addEventListener('lunchgo:google-maps-ready', () => {
+      setupGoogleEnhancements();
+    }, { once: true });
   }
 
   document.getElementById('loc-btn').textContent = loc.label;
@@ -474,25 +505,6 @@ function init() {
     if (e.target === e.currentTarget) hideLocationModal();
   });
   document.getElementById('gps-btn').addEventListener('click', useGPS);
-
-  const locSearchInput = document.getElementById('loc-search-input');
-  if (locSearchInput && mapsAvailable) {
-    const autocomplete = new google.maps.places.Autocomplete(locSearchInput, {
-      types: ['geocode'],
-      componentRestrictions: { country: 'hk' },
-    });
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (!place.geometry || !place.geometry.location) return;
-      const loc = {
-        id: place.place_id || 'search_' + Date.now(),
-        label: place.name || place.formatted_address || place.geometry.location.toString(),
-        lat: place.geometry.location.lat(),
-        lng: place.geometry.location.lng(),
-      };
-      selectLocation(loc);
-    });
-  }
 
   document.getElementById('map-pick-loc-btn').addEventListener('click', () => {
     if (!ensureMapsServices()) {
