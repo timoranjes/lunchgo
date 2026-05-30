@@ -16,6 +16,7 @@ import {
 } from './api.js';
 import {
   updateDisplay,
+  renderDiscovery,
   renderMapMarkers,
   showDetail,
   patchRestaurantCard,
@@ -472,6 +473,12 @@ function applyRestaurantEnrichmentUpdate(restaurant, payload) {
   if (!restaurant) return;
   if (payload && payload.details) {
     restaurant.enrichment_status = 'ready';
+    if (payload.details.business_status) {
+      restaurant.business_status = payload.details.business_status;
+    }
+    if (payload.details.permanently_closed === true) {
+      restaurant.permanently_closed = true;
+    }
   } else if (payload && payload.status === 'failed') {
     restaurant.enrichment_status = 'failed';
   }
@@ -910,8 +917,12 @@ function setView(view) {
     document.querySelector('.toolbar').style.display = '';
     document.querySelector('.cuisine-bar').style.display = '';
     document.querySelector('.price-bar').style.display = '';
-    document.getElementById('discovery-section').style.display =
-      state.filtered.filter(r => r.rating && r.rating > 0).length > 0 ? '' : 'none';
+    document.getElementById('discovery-section').style.display = '';
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => renderDiscovery(state.filtered));
+    } else {
+      renderDiscovery(state.filtered);
+    }
   } else {
     document.getElementById('list-view').style.display = 'none';
     document.getElementById('map-view').classList.add('active');

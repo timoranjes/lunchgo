@@ -106,6 +106,8 @@
  * @property {string} [phone] - Phone number from Places Details
  * @property {string} [website] - Website URL from Places Details
  * @property {number} [distance] - Computed distance in meters from current location
+ * @property {string} [business_status] - Google Places business status if available
+ * @property {boolean} [permanently_closed] - Legacy closure flag from Google Places
  */
 
 /**
@@ -223,7 +225,7 @@
  * District index manifest structure.
  *
  * @typedef {Object} DistrictIndex
- * @property {number} v - Schema version (currently 2)
+ * @property {number} v - Schema version (currently 4)
  * @property {number} total - Total restaurant count across all districts
  * @property {Object.<string, DistrictEntry>} districts - Map of district name to entry
  * @property {DistrictIndexStats} [stats] - Optional aggregate stats
@@ -261,8 +263,10 @@
  * Position 14: amenity (string)
  * Position 15: source (string)
  * Position 16: location_status (string)
+ * Position 17: business_status (string)
+ * Position 18: permanently_closed (boolean|string|null)
  *
- * @typedef {Array<string|number|null>} DistrictRow
+ * @typedef {Array<string|number|boolean|null>} DistrictRow
  */
 
 /**

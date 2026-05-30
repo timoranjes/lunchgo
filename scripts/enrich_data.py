@@ -85,7 +85,8 @@ FIELDS: List[str] = [
     'id', 'name', 'name_en', 'lat', 'lng', 'address',
     'district', 'district_tc', 'licence_type', 'expiry',
     'cuisine', 'phone', 'website', 'opening_hours',
-    'amenity', 'source', 'location_status',
+    'amenity', 'source', 'location_status', 'business_status',
+    'permanently_closed',
 ]
 
 FehdRecord = Dict[str, Any]
@@ -189,7 +190,9 @@ def _parse_fehd_xml(xml_text: str) -> Dict[str, FehdRecord]:
     root = ET.fromstring(xml_text)
     restaurants: Dict[str, FehdRecord] = {}
 
-    lps = root.find('LPS') or root
+    lps = root.find('LPS')
+    if lps is None:
+        lps = root
     for lp in lps.findall('LP'):
         def get(tag: str) -> str:
             el = lp.find(tag)
@@ -334,6 +337,8 @@ def parse_osm_element(elem: OsmElement) -> Optional[ParsedOsmPlace]:
         'opening_hours': tags.get('opening_hours', ''),
         'amenity': tags.get('amenity', 'restaurant'),
         'location_status': 'exact',
+        'business_status': tags.get('business_status', tags.get('status', '')),
+        'permanently_closed': str(tags.get('permanently_closed', '')).strip().lower() in {'1', 'true', 'yes'},
     }
 
 
@@ -348,6 +353,10 @@ def normalize_name(name: Optional[str]) -> str:
         name = name.replace(sfx, '')
     name = re.sub(r'[^\w\s&\-./]', '', name)
     return ' '.join(name.split())
+
+
+def normalize_business_status(value: Any) -> str:
+    return str(value or '').strip().upper().replace('-', '_').replace(' ', '_')
 
 
 def name_similarity(a: str, b: str) -> float:
@@ -453,6 +462,7 @@ def _candidate_lookup_score(
     return (address_score * 0.7) + (name_score * 0.2) + district_bonus
 
 
+@lru_cache(maxsize=2048)
 def _search_location_lookup(query: str) -> List[Dict[str, Any]]:
     if not query:
         return []
@@ -460,7 +470,9 @@ def _search_location_lookup(query: str) -> List[Dict[str, Any]]:
     resp = _retry_with_backoff(
         _http_get_json,
         ALS_LOCATION_SEARCH_URL,
-        timeout=30,
+        max_retries=1,
+        initial_backoff=1.0,
+        timeout=10,
         q=query,
     )
     payload = resp.json()
@@ -472,7 +484,9 @@ def _transform_hkgrid_to_wgs(easting: float, northing: float) -> Optional[Tuple[
     resp = _retry_with_backoff(
         _http_get_json,
         GEODETIC_TRANSFORM_URL,
-        timeout=30,
+        max_retries=1,
+        initial_backoff=1.0,
+        timeout=10,
         inSys='hkgrid',
         outSys='wgsgeog',
         e=easting,
@@ -527,7 +541,6 @@ def geocode_fehd_address(
                     address,
                     fehd_name,
                     fehd_name_en,
-                    district_name,
                     dist_code,
                     candidate,
                 )
@@ -552,6 +565,7 @@ def geocode_fehd_address(
         return None
 
 
+@lru_cache(maxsize=4096)
 def fetch_fehd_approximate_coords(
     fehd_address: str,
     dist_code: str,
@@ -580,23 +594,30 @@ def has_suspicious_osm_candidate(
         return False
 
     for candidate in candidates:
-      candidate_name = candidate.get('name', '')
-      candidate_name_en = candidate.get('name_en', '')
-      name_score = max(
-          name_similarity(name_tc, candidate_name),
-          name_similarity(name_en, candidate_name),
-          name_similarity(name_tc, candidate_name_en),
-          name_similarity(name_en, candidate_name_en),
-      )
-      if name_score < 0.2:
-          continue
+        candidate_name = candidate.get('name', '')
+        candidate_name_en = candidate.get('name_en', '')
+        candidate_address = candidate.get('address', '') or ''
+        name_score = max(
+            name_similarity(name_tc, candidate_name),
+            name_similarity(name_en, candidate_name),
+            name_similarity(name_tc, candidate_name_en),
+            name_similarity(name_en, candidate_name_en),
+        )
+        address_score = address_agreement_score(fehd_address, candidate_address)
+        candidate_district = candidate.get('_district')
 
-      candidate_address = candidate.get('address', '') or ''
-      if address_conflicts(fehd_address, candidate_address):
-          return True
+        if candidate_district == dist_code:
+            if name_score < 0.2:
+                continue
+            if address_conflicts(fehd_address, candidate_address) or address_score < 0.3:
+                return True
+            continue
 
-      if candidate.get('_district') and candidate['_district'] != dist_code:
-          return True
+        if candidate_district and candidate_district != dist_code:
+            if name_score < 0.75:
+                continue
+            if address_conflicts(fehd_address, candidate_address) or address_score < 0.3:
+                return True
 
     return False
 
@@ -628,6 +649,7 @@ def assign_district(lat: float, lng: float) -> Optional[str]:
 def merge(
     fehd_data: Dict[str, FehdRecord],
     osm_elements: List[OsmElement],
+    allow_approximate: bool = True,
 ) -> List[MergedRestaurant]:
     logger.info('Merging data...')
 
@@ -743,6 +765,8 @@ def merge(
                 'amenity': best_match.get('amenity', 'restaurant'),
                 'location_status': 'exact',
                 'source': 'fehd+osm',
+                'business_status': best_match.get('business_status', ''),
+                'permanently_closed': best_match.get('permanently_closed', False),
             })
         else:
             # Skip records with empty names entirely
@@ -751,9 +775,9 @@ def merge(
                 fehd_empty_name += 1
                 continue
 
-            suspicious_candidates = osm_by_district.get(dist_code, [])
+            suspicious_candidates = osm_places
             approx_coords: Optional[Tuple[float, float]] = None
-            if has_suspicious_osm_candidate(
+            if allow_approximate and has_suspicious_osm_candidate(
                 fehd_address,
                 dist_code,
                 name_tc,
@@ -792,6 +816,8 @@ def merge(
                 'amenity': 'restaurant',
                 'location_status': 'approximate' if approx_coords else 'missing',
                 'source': 'fehd',
+                'business_status': '',
+                'permanently_closed': False,
             })
 
     osm_only = 0
@@ -821,6 +847,8 @@ def merge(
                 'amenity': p.get('amenity', 'restaurant'),
                 'location_status': p.get('location_status', 'exact'),
                 'source': 'osm',
+                'business_status': p.get('business_status', ''),
+                'permanently_closed': p.get('permanently_closed', False),
             })
 
     logger.info('  FEHD+OSM matched: %d', fehd_matched)
@@ -829,7 +857,14 @@ def merge(
     logger.info('  FEHD empty-name (excluded): %d', fehd_empty_name)
     logger.info('  OSM-only (new places): %d', osm_only)
     logger.info('  Total: %d', len(results))
-    return results
+    return [
+        r for r in results
+        if not (
+            r.get('permanently_closed') is True
+            or normalize_business_status(r.get('business_status', '')) == 'CLOSED_PERMANENTLY'
+            or normalize_business_status(r.get('business_status', '')) == 'CLOSED'
+        )
+    ]
 
 
 def write_chunks(restaurants: List[MergedRestaurant]) -> None:
@@ -843,7 +878,7 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
         by_district[r['district']].append(r)
 
     index: Dict[str, Any] = {
-        'v': 3,
+        'v': 4,
         'total': len(restaurants),
         'districts': {},
     }
@@ -875,7 +910,7 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
             status_counts[str(r.get('location_status', 'missing'))] += 1
 
         chunk: Dict[str, Any] = {
-            'v': 3,
+            'v': 4,
             'district': district,
             'count': len(records),
             'fields': FIELDS,
@@ -941,7 +976,7 @@ def main() -> None:
         sys.exit(1)
 
     osm = fetch_overpass()
-    results = merge(fehd, osm)
+    results = merge(fehd, osm, allow_approximate=False)
     write_chunks(results)
 
     logger.info('Done.')

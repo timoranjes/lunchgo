@@ -21,6 +21,7 @@ from enrich_data import (
     _parse_fehd_xml, fetch_fehd, fetch_overpass, parse_osm_element,
     merge, write_chunks, _retry_with_backoff, _http_get, _http_post,
     normalize_name, name_similarity, haversine_km, assign_district,
+    fetch_fehd_approximate_coords,
     FIELDS, DISTRICT_MAP, LICENCE_TYPES, ENDORSEMENT_MAP
 )
 
@@ -435,6 +436,40 @@ class TestMergeLogic:
         assert fehd_record['lat'] is None
         assert fehd_record['lng'] is None
 
+    def test_merge_does_not_geocode_for_unrelated_osm_candidate(self):
+        fehd_data = {
+            '789013': {
+                'name': 'Island Restaurant',
+                'address': 'Remote Island',
+                'district': '17',
+                'type': 'RL',
+                'expdate': '2024-06-30'
+            }
+        }
+
+        osm_elements = [
+            {
+                'id': 11112,
+                'type': 'node',
+                'lat': 22.3970213,
+                'lon': 114.1957234,
+                'tags': {
+                    'name': 'Unrelated Restaurant',
+                    'addr:full': 'Somewhere Else',
+                    'amenity': 'restaurant'
+                }
+            }
+        ]
+
+        with patch('enrich_data.fetch_fehd_approximate_coords') as mock_approx:
+            result = merge(fehd_data, osm_elements)
+
+        assert len(result) == 2
+        fehd_record = next(r for r in result if r['id'] == 'fehd_789013')
+        assert fehd_record['lat'] is None
+        assert fehd_record['lng'] is None
+        mock_approx.assert_not_called()
+
     def test_merge_osm_only_no_fehd(self):
         fehd_data = {}
         
@@ -515,7 +550,7 @@ class TestMergeLogic:
                 'lat': 22.3960933,
                 'lon': 114.1963926,
                 'tags': {
-                    'name': "鍾菜館 Chung's House",
+                    'name': '粵菜館',
                     'addr:full': '新界沙田火炭 㘭背灣街 13號',
                     'amenity': 'restaurant'
                 }
@@ -533,7 +568,7 @@ class TestMergeLogic:
         assert fehd_record['lng'] == 114.2277168
         assert '恒安邨' in fehd_record['address']
         osm_record = next(r for r in result if r['id'] == 'osm_4796652881')
-        assert osm_record['name'] == "鍾菜館 Chung's House"
+        assert osm_record['name'] == '粵菜館'
 
     def test_merge_rejects_address_conflicting_exact_match(self):
         fehd_data = {
@@ -574,6 +609,67 @@ class TestMergeLogic:
         assert '灣仔' in fehd_record['address']
         osm_record = next(r for r in result if r['id'] == 'osm_10115247867')
         assert osm_record['district'] == 'Sha Tin'
+
+    def test_merge_skips_closed_google_place(self):
+        fehd_data = {
+            '7777777777': {
+                'name': '測試餐廳',
+                'name_tc': '測試餐廳',
+                'address': '香港灣仔測試道1號',
+                'address_tc': '香港灣仔測試道1號',
+                'district': '12',
+                'type': 'RL',
+                'expdate': '2027-06-30'
+            }
+        }
+
+        osm_elements = [
+            {
+                'id': 2222222,
+                'type': 'node',
+                'lat': 22.2788,
+                'lon': 114.1740,
+                'tags': {
+                    'name': '測試餐廳',
+                    'addr:full': '香港灣仔測試道1號',
+                    'amenity': 'restaurant'
+                }
+            }
+        ]
+
+        with patch('enrich_data.fetch_fehd_approximate_coords', return_value=(22.2788, 114.1740)):
+            result = merge(fehd_data, osm_elements + [{
+                'id': 3333333,
+                'type': 'node',
+                'lat': 22.2790,
+                'lon': 114.1742,
+                'tags': {
+                    'name': '已結業測試店',
+                    'addr:full': '香港灣仔測試道9號',
+                    'amenity': 'restaurant',
+                    'business_status': 'CLOSED_PERMANENTLY'
+                }
+            }])
+
+        assert all(r['name'] != '已結業測試店' for r in result)
+
+    def test_fetch_fehd_approximate_coords_uses_location_lookup_cache(self):
+        with patch('enrich_data._search_location_lookup', return_value=[{
+            'x': '833000',
+            'y': '816000',
+            'addressZH': '香港灣仔測試道1號',
+            'addressEN': '1 Test Road, Wan Chai',
+            'districtZH': '灣仔',
+            'districtEN': 'Wan Chai',
+            'nameZH': '測試餐廳',
+            'nameEN': 'Test Restaurant',
+        }]), patch('enrich_data._transform_hkgrid_to_wgs', return_value=(22.2788, 114.1740)) as mock_transform:
+            first = fetch_fehd_approximate_coords('香港灣仔測試道1號', '12', 'Wan Chai', '測試餐廳', 'Test Restaurant')
+            second = fetch_fehd_approximate_coords('香港灣仔測試道1號', '12', 'Wan Chai', '測試餐廳', 'Test Restaurant')
+
+        assert first == (22.2788, 114.1740)
+        assert second == (22.2788, 114.1740)
+        assert mock_transform.call_count == 1
 
 
 class TestOutputFormat:
@@ -632,7 +728,7 @@ class TestOutputFormat:
                 
                 with open(central_file, 'r', encoding='utf-8') as f:
                     central_data = json.load(f)
-                assert central_data['v'] == 3
+                assert central_data['v'] == 4
                 assert central_data['district'] == 'Central/Western'
                 assert central_data['count'] == 1
                 assert central_data['fields'] == FIELDS
@@ -643,10 +739,13 @@ class TestOutputFormat:
                 assert row1[2] == 'Test Restaurant 1 EN'
                 assert row1[3] == 22.285
                 assert row1[4] == 114.150
+                assert row1[16] == ''
+                assert row1[17] == ''
+                assert row1[18] == ''
                 
                 with open(index_file, 'r', encoding='utf-8') as f:
                     index_data = json.load(f)
-                assert index_data['v'] == 3
+                assert index_data['v'] == 4
                 assert index_data['total'] == 2
                 assert 'Central/Western' in index_data['districts']
                 assert 'Wan Chai' in index_data['districts']

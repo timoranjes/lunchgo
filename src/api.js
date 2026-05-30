@@ -44,6 +44,8 @@ const BASE_DELAY_MS = 500;
 const PHOTO_ENRICH_FIELDS = [
   'photos',
   'formatted_address',
+  'business_status',
+  'permanently_closed',
   'opening_hours',
   'formatted_phone_number',
   'website',
@@ -55,6 +57,8 @@ const DETAIL_FIELDS = [
   'name',
   'formatted_address',
   'formatted_phone_number',
+  'business_status',
+  'permanently_closed',
   'opening_hours',
   'rating',
   'user_ratings_total',
@@ -432,6 +436,7 @@ function getDetailsPromise(placesService, request) {
 function buildRestaurantFromPlace(p) {
   const placeId = p.place_id || Math.random().toString(36).slice(2);
   const types = p.types || [];
+  const businessStatus = String(p.business_status || '').trim();
 
   return {
     id: 'place_' + placeId,
@@ -453,6 +458,8 @@ function buildRestaurantFromPlace(p) {
     source: 'places',
     amenity: 'restaurant',
     enrichment_status: 'pending',
+    business_status: businessStatus,
+    permanently_closed: p.permanently_closed === true || businessStatus === 'CLOSED_PERMANENTLY',
   };
 }
 
@@ -478,6 +485,10 @@ function buildEnrichmentPayload(place) {
     types: place.types || [],
     source: 'places',
     enrichment_status: 'ready',
+    business_status: String(place.business_status || '').trim(),
+    permanently_closed:
+      place.permanently_closed === true ||
+      String(place.business_status || '').trim() === 'CLOSED_PERMANENTLY',
   };
 
   if (place.photos && place.photos.length > 0) {
@@ -714,6 +725,8 @@ function applyEnrichmentPayload(restaurant, payload, options = {}) {
   restaurant.source = restaurant.source || payload.source || 'places';
   restaurant.enrichment_status = payload.enrichment_status || 'ready';
   restaurant.enrichment_error = '';
+  restaurant.business_status = payload.business_status || restaurant.business_status || '';
+  restaurant.permanently_closed = payload.permanently_closed === true || restaurant.permanently_closed === true;
 
   if (!keepExistingCoordinates) {
     if (payload.lat !== undefined && payload.lat !== null && isFinite(payload.lat)) {

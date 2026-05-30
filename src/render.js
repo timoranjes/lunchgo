@@ -24,6 +24,7 @@ import {
   haversine,
   formatDist,
   isValidRestaurant,
+  isDisplayableRestaurant,
   hasValidCoordinates,
   renderStars,
   priceLevel,
@@ -175,8 +176,8 @@ function matchRandomQuery(restaurant, query) {
 
 function getRandomPickBasePools() {
   const primarySource = state.filtered.length > 0 ? state.filtered : state.placesData;
-  const primary = decorateCandidatesWithDistance(primarySource.filter(isValidRestaurant));
-  const fallback = decorateCandidatesWithDistance(state.placesData.filter(isValidRestaurant));
+  const primary = decorateCandidatesWithDistance(primarySource.filter(isDisplayableRestaurant));
+  const fallback = decorateCandidatesWithDistance(state.placesData.filter(isDisplayableRestaurant));
   return { primary, fallback };
 }
 
@@ -642,7 +643,7 @@ export function updateDisplay(reset) {
 
   // VALIDATION: Filter out invalid entries first
   const preValidationCount = list.length;
-  list = list.filter(isValidRestaurant);
+  list = list.filter(isValidRestaurant).filter(isDisplayableRestaurant);
   const filteredCount = preValidationCount - list.length;
 
   if (state.searchQuery) {
@@ -733,7 +734,9 @@ export function renderDiscovery(list) {
 
   if (!section || !scroll || !subtitle) return;
 
-  const rated = list.filter((r) => Number.isFinite(r.rating) && Number(r.rating) >= 4.7);
+  const currentRated = list.filter((r) => Number.isFinite(r.rating) && Number(r.rating) >= 4.7 && isDisplayableRestaurant(r));
+  const fallbackRated = state.placesData.filter((r) => Number.isFinite(r.rating) && Number(r.rating) >= 4.7 && isDisplayableRestaurant(r));
+  const rated = currentRated.length > 0 ? currentRated : fallbackRated;
 
   if (rated.length === 0) {
     section.style.display = 'none';
@@ -765,6 +768,19 @@ export function renderDiscovery(list) {
       }
     });
   });
+}
+
+function getClosedStatusText(restaurant) {
+  const status = String(
+    restaurant?.business_status ||
+    restaurant?.businessStatus ||
+    (restaurant?.permanently_closed ? 'CLOSED_PERMANENTLY' : '')
+  ).trim().toUpperCase();
+
+  if (status === 'CLOSED_PERMANENTLY') return '已結業';
+  if (status === 'CLOSED_TEMPORARILY') return '暫時停業';
+  if (status === 'CLOSED') return '已停業';
+  return '';
 }
 
 /**
@@ -892,6 +908,7 @@ export function renderMapMarkers(list) {
   const bounds = state.map.getBounds();
   const visible = bounds
     ? list.filter((r) => {
+          if (!isDisplayableRestaurant(r)) return false;
           if (!hasValidCoordinates(r)) return false;
           try {
             return bounds.contains({
@@ -903,6 +920,7 @@ export function renderMapMarkers(list) {
           }
         })
     : list.filter((r) => {
+          if (!isDisplayableRestaurant(r)) return false;
           return hasValidCoordinates(r);
         });
 
@@ -959,6 +977,7 @@ export function showDetail(id) {
   const hasCoords = hasValidCoordinates(r);
   const dist = loc && hasCoords ? formatDist(getRestaurantDistance(r, loc)) : '';
   const isFav = Store.isFav(r.id);
+  const closedStatusText = getClosedStatusText(r);
 
   const favBtn = document.getElementById('detail-fav');
   if (favBtn) {
@@ -1011,6 +1030,9 @@ export function showDetail(id) {
       ? '<span class="detail-meta-item">' +
         escHtml(r.district_tc || /** @type {string} */ (r.district)) +
         '</span>'
+      : '') +
+    (closedStatusText
+      ? '<span class="detail-meta-item detail-meta-item-closed">' + escHtml(closedStatusText) + '</span>'
       : '') +
     renderLocationTrustLabel(r) +
     '</div>' +
@@ -1079,19 +1101,25 @@ export function showDetail(id) {
         const openingHours = details.opening_hours || null;
         const phone = details.formatted_phone_number || details.phone || '';
         const website = details.website || '';
+        const closedStatusText = getClosedStatusText({
+          ...r,
+          business_status: details.business_status || r.business_status || '',
+          permanently_closed: details.permanently_closed === true || r.permanently_closed === true,
+        });
         let hoursHtml = '<div class="detail-section-title">營業時間</div>';
 
         if (openingHours) {
           const isOpen = typeof openingHours.isOpen === 'function'
             ? openingHours.isOpen()
             : false;
+          const statusText = closedStatusText || (isOpen ? '營業中' : '暫時休息');
           hoursHtml +=
             '<div class="detail-hours">' +
             '<div class="detail-hours-row">' +
             '<span class="' +
-            (isOpen ? 'detail-hours-open' : 'detail-hours-closed') +
+            (closedStatusText ? 'detail-hours-closed' : 'detail-hours-open') +
             '">' +
-            (isOpen ? '營業中' : '已歇業') +
+            statusText +
             '</span>' +
             '</div>' +
             (openingHours.weekday_text || [])
@@ -1150,12 +1178,18 @@ export function showDetail(id) {
         const isOpen = details.opening_hours.isOpen
           ? details.opening_hours.isOpen()
           : false;
+        const closedStatusText = getClosedStatusText({
+          ...r,
+          business_status: details.business_status || r.business_status || '',
+          permanently_closed: details.permanently_closed === true || r.permanently_closed === true,
+        });
+        const statusText = closedStatusText || (isOpen ? '營業中' : '暫時休息');
         hoursHtml += '<div class="detail-hours">' +
           '<div class="detail-hours-row">' +
           '<span class="' +
-          (isOpen ? 'detail-hours-open' : 'detail-hours-closed') +
+          (closedStatusText ? 'detail-hours-closed' : 'detail-hours-open') +
           '">' +
-          (isOpen ? '營業中' : '已歇業') +
+          statusText +
           '</span>' +
           '</div>' +
           (details.opening_hours.weekday_text || [])
@@ -1557,7 +1591,7 @@ export function renderFavorites() {
   // Filter out saved favorites that no longer exist in placesData (e.g., filtered by validation)
   let favs = favIds
     .map((id) => state.placesData.find((r) => r.id === id))
-    .filter(Boolean);
+    .filter((r) => Boolean(r) && isDisplayableRestaurant(/** @type {import('./types.js').Restaurant} */ (r)));
 
   switch (favSortMode) {
     case 'name':

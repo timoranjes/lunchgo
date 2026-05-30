@@ -62,6 +62,56 @@ export function hasValidCoordinates(restaurant) {
 }
 
 /**
+ * Normalize a Google Places business status value.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function normalizeBusinessStatus(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+}
+
+/**
+ * Check whether a restaurant/place is marked as closed.
+ *
+ * Accepts both the legacy `permanently_closed` flag and the newer
+ * `business_status` / `businessStatus` fields.
+ *
+ * @param {import('./types.js').Restaurant} restaurant
+ * @returns {boolean}
+ */
+export function isClosedRestaurant(restaurant) {
+  if (!restaurant) return false;
+  if (restaurant.permanently_closed === true || restaurant.closed === true || restaurant.is_closed === true) {
+    return true;
+  }
+
+  const status = normalizeBusinessStatus(
+    /** @type {string} */ (
+      restaurant.business_status ||
+      restaurant.businessStatus ||
+      restaurant.operational_status ||
+      ''
+    )
+  );
+
+  return status === 'CLOSED_PERMANENTLY' || status === 'CLOSED';
+}
+
+/**
+ * Check whether a restaurant can be shown in the app.
+ *
+ * @param {import('./types.js').Restaurant} restaurant
+ * @returns {boolean}
+ */
+export function isDisplayableRestaurant(restaurant) {
+  return isValidRestaurant(restaurant) && !isClosedRestaurant(restaurant);
+}
+
+/**
  * Render a star rating string using Unicode star characters.
  *
  * @param {number} rating - Rating value (0-5)

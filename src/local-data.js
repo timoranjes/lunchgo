@@ -95,7 +95,16 @@ function mergeGooglePlaceIntoLocal(local, place) {
   local.phone = place.phone || local.phone || '';
   local.website = place.website || local.website || '';
   local.opening_hours = place.opening_hours || local.opening_hours || null;
+  local.business_status = place.business_status || local.businessStatus || local.business_status || '';
+  local.permanently_closed = place.permanently_closed === true || local.permanently_closed === true;
   local.enrichment_status = local.enrichment_status || 'pending';
+}
+
+function normalizeBusinessStatus(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
 }
 
 // ---------------------------------------------------------------------------
@@ -297,6 +306,9 @@ export function parseCompactRecord(row, fields) {
       : 'exact'
   );
 
+  const businessStatus = String(obj.business_status || obj.businessStatus || '').trim();
+  const permanentlyClosed = obj.permanently_closed === true || obj.permanently_closed === 'true';
+
   return {
     id: id,
     name: String(obj.name || ''),
@@ -320,6 +332,8 @@ export function parseCompactRecord(row, fields) {
     expiry: String(obj.expiry || ''),
     endorsements: Array.isArray(obj.endorsements) ? obj.endorsements : [],
     location_status: inferredStatus,
+    business_status: businessStatus,
+    permanently_closed: permanentlyClosed,
     enrichment_status: inferredSource === 'places' ? 'ready' : 'pending',
   };
 }
@@ -366,6 +380,10 @@ export function mergeRestaurants(localData, placesData) {
 
   for (const place of placesData) {
     const placeId = String(place.place_id || '').trim();
+    const businessStatus = normalizeBusinessStatus(place?.business_status || place?.businessStatus || '');
+    const isClosedPlace =
+      !!place &&
+      (place.permanently_closed === true || businessStatus === 'CLOSED_PERMANENTLY' || businessStatus === 'CLOSED');
     const exactKeys = [
       normalizeRestaurantName(place.name),
       normalizeRestaurantName(place.name_en),
@@ -411,6 +429,37 @@ export function mergeRestaurants(localData, placesData) {
         return;
       }
 
+      const localAddress = String(local.address || '');
+      const placeAddress = String(place.address || place.vicinity || '');
+      if (localAddress && placeAddress) {
+        const localTokens = localAddress
+          .normalize('NFKC')
+          .toLowerCase()
+          .replace(/[，,。．、;；:：()（）\[\]{}]/g, ' ')
+          .match(/[\u4e00-\u9fff]+|[a-z0-9]+/g) || [];
+        const placeTokens = placeAddress
+          .normalize('NFKC')
+          .toLowerCase()
+          .replace(/[，,。．、;；:：()（）\[\]{}]/g, ' ')
+          .match(/[\u4e00-\u9fff]+|[a-z0-9]+/g) || [];
+        const localSet = new Set(localTokens.filter((token) => token.length > 1));
+        const placeSet = new Set(placeTokens.filter((token) => token.length > 1));
+        let overlap = 0;
+        for (const token of localSet) {
+          if (placeSet.has(token)) overlap += 1;
+        }
+        const addressScore = overlap / Math.max(localSet.size, placeSet.size, 1);
+        const localDistrict = String(local.district_tc || local.district || '').trim();
+        const placeDistrict = String(place.district_tc || place.district || '').trim();
+        const districtMismatch = localDistrict && placeDistrict && localDistrict !== placeDistrict;
+        const isStrictSameName = nameScore >= 0.95;
+        const hasStrongAddress = addressScore >= 0.5;
+
+        if (districtMismatch && !hasStrongAddress && !isStrictSameName) return;
+        if (addressScore < 0.2 && districtMismatch) return;
+        if (addressScore < 0.25 && !isStrictSameName) return;
+      }
+
       if (score > bestScore) {
         bestScore = score;
         bestLocal = local;
@@ -435,7 +484,20 @@ export function mergeRestaurants(localData, placesData) {
       if (placeId) {
         matchedPlaceIds.add(placeId);
       }
-      mergeGooglePlaceIntoLocal(bestLocal, place);
+      if (isClosedPlace) {
+        bestLocal.business_status = 'CLOSED_PERMANENTLY';
+        bestLocal.permanently_closed = true;
+      } else {
+        mergeGooglePlaceIntoLocal(bestLocal, place);
+      }
+      continue;
+    }
+
+    if (isClosedPlace) {
+      if (placeId) {
+        matchedPlaceIds.add(placeId);
+      }
+      continue;
     }
   }
 
@@ -444,6 +506,12 @@ export function mergeRestaurants(localData, placesData) {
     return !placeId || !matchedPlaceIds.has(placeId);
   });
 
-  // Keep local records as the canonical base; append only Google-only places.
-  return [...mergedLocal, ...unmatchedPlaces];
+  const combined = [...mergedLocal, ...unmatchedPlaces];
+  return combined.filter((restaurant) => {
+    const businessStatus = normalizeBusinessStatus(restaurant?.business_status || restaurant?.businessStatus || '');
+    if (restaurant?.permanently_closed === true || businessStatus === 'CLOSED_PERMANENTLY' || businessStatus === 'CLOSED') {
+      return false;
+    }
+    return true;
+  });
 }
