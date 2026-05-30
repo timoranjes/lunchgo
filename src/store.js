@@ -48,6 +48,9 @@ function deepClone(value) {
  * @property {number} lat - Latitude
  * @property {number} lng - Longitude
  * @property {string} label - Display label
+ * @property {string} [address] - Resolved address or place description
+ * @property {string} [place_id] - Google Places place_id if available
+ * @property {string} [source] - How the location was created
  */
 
 const Store = {
@@ -135,7 +138,15 @@ const Store = {
    * @returns {CustomLocation[]} Array of custom locations
    */
   getCustomLocations() {
-    return Store.get('custom_locs', []);
+    const locs = Store.get('custom_locs', []);
+    return Array.isArray(locs)
+      ? locs.map((loc) => ({
+          ...loc,
+          address: loc?.address || '',
+          place_id: loc?.place_id || '',
+          source: loc?.source || '',
+        }))
+      : [];
   },
 
   /**
@@ -145,7 +156,22 @@ const Store = {
    */
   addCustomLocation(loc) {
     const locs = Store.getCustomLocations();
-    locs.push(loc);
+    const normalized = {
+      id: loc.id || 'custom_' + Date.now(),
+      lat: Number(loc.lat),
+      lng: Number(loc.lng),
+      label: String(loc.label || '').trim(),
+      address: String(loc.address || '').trim(),
+      place_id: String(loc.place_id || '').trim(),
+      source: String(loc.source || 'manual').trim() || 'manual',
+      isCustom: true,
+    };
+    const idx = locs.findIndex((item) => item.id === normalized.id);
+    if (idx >= 0) {
+      locs[idx] = { ...locs[idx], ...normalized };
+    } else {
+      locs.push(normalized);
+    }
     Store.set('custom_locs', locs);
     return locs;
   },

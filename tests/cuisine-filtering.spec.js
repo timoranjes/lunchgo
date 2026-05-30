@@ -2,12 +2,9 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Cuisine Filtering', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for initial load to complete
-    await Promise.race([
-      page.waitForSelector('#rest-list:not(:empty)', { timeout: 10000 }),
-      page.waitForSelector('#error-banner.show', { timeout: 10000 })
-    ]);
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    // Wait for the first results batch or the error banner to appear.
+    await page.waitForSelector('#rest-list .rest-card, #error-banner.show', { timeout: 20000 });
   });
 
   test('should display all cuisine filter chips', async ({ page }) => {
@@ -48,8 +45,8 @@ test.describe('Cuisine Filtering', () => {
     const allChip = page.locator('.cuisine-chip', { hasText: '全部' });
     await expect(allChip).not.toHaveClass(/active/);
     
-    // Wait for results to update
-    await page.waitForTimeout(300);
+    // Wait for the filtered list to settle.
+    await expect.poll(async () => resultList.locator('.rest-card').count()).toBeLessThanOrEqual(initialCount);
     
     // Verify results are filtered (should be less than or equal to initial)
     const filteredCount = await resultList.locator('.rest-card').count();
@@ -76,8 +73,8 @@ test.describe('Cuisine Filtering', () => {
     await expect(allChip).toHaveClass(/active/);
     await expect(chineseChip).not.toHaveClass(/active/);
     
-    // Wait for results to revert
-    await page.waitForTimeout(300);
+    // Wait for the list to return to its original size.
+    await expect.poll(async () => resultList.locator('.rest-card').count()).toBe(initialCount);
     const finalCount = await resultList.locator('.rest-card').count();
     expect(finalCount).toBe(initialCount);
   });

@@ -14,11 +14,14 @@
  * @property {import('./types.js').Restaurant[]} filtered - Filtered subset after search/cuisine/sort
  * @property {import('./types.js').Location|null} currentLocation - Selected location
  * @property {string} currentLocationLabel - Human-readable label for current location
- * @property {'distance'|'rating'|'name'|'district'} currentSort - Active sort key
+ * @property {'distance'|'rating'} currentSort - Active sort key
  * @property {string} searchQuery - Current text search input
  * @property {'list'|'map'} currentView - Active view: 'list' | 'map'
  * @property {string} activeCuisine - Selected cuisine filter ID, 'all' for none
  * @property {string} activePrice - Selected price filter ID, 'all' means no filter
+ * @property {'walkable'|'keyword'|'favorites'} randomPickMode - Random picker mode
+ * @property {string} randomPickQuery - Random picker keyword query
+ * @property {'walkable'|'all'} randomPickScope - Candidate scope for random picker
  * @property {object|null} map - Google Maps instance
  * @property {object[]} markers - Array of Google Maps Marker instances
  * @property {object|null} placesService - Google Maps PlacesService instance
@@ -43,6 +46,9 @@ const _state = {
   currentView: 'list',
   activeCuisine: 'all',
   activePrice: 'all',
+  randomPickMode: 'walkable',
+  randomPickQuery: '',
+  randomPickScope: 'walkable',
   map: null,
   markers: [],
   placesService: null,
@@ -163,6 +169,9 @@ function reset(overrides = {}) {
     currentView: 'list',
     activeCuisine: 'all',
     activePrice: 'all',
+    randomPickMode: 'walkable',
+    randomPickQuery: '',
+    randomPickScope: 'walkable',
     map: null,
     markers: [],
     placesService: null,

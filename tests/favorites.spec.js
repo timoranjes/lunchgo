@@ -2,12 +2,9 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Favorites Functionality', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for initial load to complete
-    await Promise.race([
-      page.waitForSelector('#rest-list:not(:empty)', { timeout: 10000 }),
-      page.waitForSelector('#error-banner.show', { timeout: 10000 })
-    ]);
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    // Wait for the first results batch or the error banner to appear.
+    await page.waitForSelector('#rest-list .rest-card, #error-banner.show', { timeout: 20000 });
   });
 
   test('should toggle favorite status on restaurant cards', async ({ page }) => {
@@ -63,10 +60,7 @@ test.describe('Favorites Functionality', () => {
     await page.reload();
     
     // Wait for reload to complete
-    await Promise.race([
-      page.waitForSelector('#rest-list:not(:empty)', { timeout: 10000 }),
-      page.waitForSelector('#error-banner.show', { timeout: 10000 })
-    ]);
+    await page.waitForSelector('#rest-list .rest-card, #error-banner.show', { timeout: 20000 });
     
     // Verify the favorite status is preserved
     const reloadedFavButton = page.locator('.rest-card').first().locator('.rest-fav');

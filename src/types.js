@@ -128,6 +128,8 @@
  * @property {number} lat - Latitude
  * @property {number} lng - Longitude
  * @property {string} label - User-provided display label
+ * @property {string} [address] - Resolved address or place description
+ * @property {string} [place_id] - Google Places place_id for the resolved location
  * @property {false} [isDefault] - Always false or undefined
  * @property {true} [isCustom] - Always true for custom locations
  */
@@ -161,11 +163,14 @@
  * @property {Restaurant[]} filtered - Filtered subset after search/cuisine/sort
  * @property {Location|null} currentLocation - Selected location
  * @property {string} currentLocationLabel - Human-readable location label
- * @property {'distance'|'rating'|'name'|'district'} currentSort - Active sort key
+ * @property {'distance'|'rating'} currentSort - Active sort key
  * @property {string} searchQuery - Current text search input
  * @property {'list'|'map'} currentView - Active view mode
  * @property {string} activeCuisine - Selected cuisine filter ID, 'all' for none
  * @property {string} activePrice - Selected price filter ID, 'all' for none
+ * @property {'walkable'|'keyword'|'favorites'} randomPickMode - Random picker mode
+ * @property {string} randomPickQuery - Current random picker keyword query
+ * @property {'walkable'|'all'} randomPickScope - Random picker candidate scope
  * @property {Object|null} map - Google Maps instance
  * @property {Object[]} markers - Google Maps Marker instances
  * @property {Object|null} placesService - Google PlacesService instance
@@ -279,7 +284,7 @@
  * Sort configuration for restaurant lists.
  *
  * @typedef {Object} SortConfig
- * @property {string} key - Sort key: 'distance' | 'rating' | 'name'
+ * @property {string} key - Sort key: 'distance' | 'rating'
  * @property {string} label - Display label
  * @property {function(Restaurant, Restaurant): number} fn - Comparator function
  */

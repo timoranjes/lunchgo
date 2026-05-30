@@ -55,6 +55,10 @@ const _callbacks = {
   onHideFavoritesPage: null,
 };
 
+const WALKABLE_DISTANCE_M = 2500;
+const RANDOM_PICK_ROLL_INTERVAL_MS = 70;
+const RANDOM_PICK_ROLL_COUNT = 18;
+
 /**
  * Register callbacks for interactivity.
  *
@@ -114,6 +118,140 @@ function getRestaurantDistance(restaurant, location) {
 
 function getDistanceSortValue(distance) {
   return Number.isFinite(distance) ? distance : Infinity;
+}
+
+function getRestaurantSortDistance(restaurant, location) {
+  if (!location || !hasValidCoordinates(restaurant)) return undefined;
+  const lat = parseFloat(/** @type {string} */ (restaurant.lat));
+  const lng = parseFloat(/** @type {string} */ (restaurant.lng));
+  if (!isFinite(lat) || !isFinite(lng)) return undefined;
+  return haversine(location.lat, location.lng, lat, lng);
+}
+
+function isWalkableRestaurant(restaurant) {
+  return Number.isFinite(restaurant.distance) && restaurant.distance <= WALKABLE_DISTANCE_M;
+}
+
+function decorateCandidatesWithDistance(restaurants) {
+  const loc = state.currentLocation;
+  return restaurants.map((restaurant) => ({
+    ...restaurant,
+    distance: loc && hasValidCoordinates(restaurant)
+      ? getRestaurantSortDistance(restaurant, loc)
+      : restaurant.distance,
+  }));
+}
+
+function uniqueCandidates(restaurants) {
+  const seen = new Set();
+  const result = [];
+  for (const restaurant of restaurants || []) {
+    if (!restaurant || !restaurant.id || seen.has(restaurant.id)) continue;
+    seen.add(restaurant.id);
+    result.push(restaurant);
+  }
+  return result;
+}
+
+function normalizeQueryText(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase();
+}
+
+function matchRandomQuery(restaurant, query) {
+  const q = normalizeQueryText(query);
+  if (!q) return true;
+  const haystacks = [
+    restaurant.name,
+    restaurant.name_en,
+    restaurant.address,
+    restaurant.cuisine,
+    restaurant.types?.join(' '),
+  ].map(normalizeQueryText);
+  return haystacks.some((haystack) => haystack.includes(q));
+}
+
+function getRandomPickBasePools() {
+  const primarySource = state.filtered.length > 0 ? state.filtered : state.placesData;
+  const primary = decorateCandidatesWithDistance(primarySource.filter(isValidRestaurant));
+  const fallback = decorateCandidatesWithDistance(state.placesData.filter(isValidRestaurant));
+  return { primary, fallback };
+}
+
+function applyRandomPickMode(list, mode, query) {
+  let candidates = list;
+
+  switch (mode) {
+    case 'keyword':
+      candidates = candidates.filter((restaurant) => matchRandomQuery(restaurant, query));
+      break;
+    case 'favorites':
+      candidates = candidates.filter((restaurant) => Store.isFav(restaurant.id));
+      break;
+    case 'walkable':
+    default:
+      break;
+  }
+
+  return uniqueCandidates(candidates);
+}
+
+function buildRandomPickPools(mode, query, scope) {
+  const { primary, fallback } = getRandomPickBasePools();
+  const pools = [];
+
+  const primaryWalkable = primary.filter((restaurant) => isWalkableRestaurant(restaurant));
+  const fallbackWalkable = fallback.filter((restaurant) => isWalkableRestaurant(restaurant));
+  const primaryNearby = primary.filter((restaurant) => Number.isFinite(restaurant.distance) && restaurant.distance <= WALKABLE_DISTANCE_M * 2);
+  const fallbackNearby = fallback.filter((restaurant) => Number.isFinite(restaurant.distance) && restaurant.distance <= WALKABLE_DISTANCE_M * 2);
+  const primaryCoords = primary.filter((restaurant) => Number.isFinite(restaurant.distance));
+  const fallbackCoords = fallback.filter((restaurant) => Number.isFinite(restaurant.distance));
+
+  pools.push(
+    applyRandomPickMode(primaryWalkable, mode, query),
+    applyRandomPickMode(fallbackWalkable, mode, query),
+    applyRandomPickMode(primaryNearby, mode, query),
+    applyRandomPickMode(fallbackNearby, mode, query),
+    applyRandomPickMode(primaryCoords, mode, query),
+    applyRandomPickMode(fallbackCoords, mode, query),
+    applyRandomPickMode(primary, mode, query),
+    applyRandomPickMode(fallback, mode, query),
+  );
+
+  if (scope === 'all') {
+    pools.push(
+      applyRandomPickMode(primaryCoords, 'walkable', ''),
+      applyRandomPickMode(fallbackCoords, 'walkable', ''),
+      applyRandomPickMode(primary, 'walkable', ''),
+      applyRandomPickMode(fallback, 'walkable', ''),
+    );
+  }
+
+  return pools.filter((pool) => Array.isArray(pool) && pool.length > 0);
+}
+
+function getRandomPickCandidates(mode, query, scope) {
+  const pools = buildRandomPickPools(mode, query, scope);
+  if (pools.length > 0) {
+    return pools[0];
+  }
+
+  const { primary, fallback } = getRandomPickBasePools();
+  return uniqueCandidates(primary.length > 0 ? primary : fallback);
+}
+
+function getRandomPickSettings() {
+  const overlay = document.getElementById('random-overlay');
+  const queryInput = document.getElementById('random-query-input');
+  const modeButton = document.querySelector('#random-mode-bar .random-mode-btn.active');
+  const scopeButton = document.querySelector('#random-scope-bar .random-scope-btn.active');
+  return {
+    mode: modeButton?.dataset.randomMode || overlay?.dataset.randomMode || state.randomPickMode || 'walkable',
+    query: queryInput?.value || overlay?.dataset.randomQuery || state.randomPickQuery || '',
+    scope: scopeButton?.dataset.randomScope || overlay?.dataset.randomScope || state.randomPickScope || 'walkable',
+  };
 }
 
 function updateFavoriteButtonState(button, restaurantId) {
@@ -186,6 +324,22 @@ function renderCardLoadingMeta(restaurant) {
   }
   if (!restaurant.enrichment_status || restaurant.enrichment_status === 'pending') {
     return '<span class="rest-loading-badge">等待補充</span>';
+  }
+  return '';
+}
+
+/**
+ * Render a trust label for restaurant location quality.
+ *
+ * @param {import('./types.js').Restaurant} restaurant
+ * @returns {string}
+ */
+function renderLocationTrustLabel(restaurant) {
+  if (restaurant.location_status === 'approximate') {
+    return '<span class="detail-location-trust detail-location-trust-approx">座標約略</span>';
+  }
+  if (restaurant.location_status === 'missing') {
+    return '<span class="detail-location-trust detail-location-trust-missing">未標示位置</span>';
   }
   return '';
 }
@@ -519,24 +673,11 @@ export function updateDisplay(reset) {
     }));
   }
 
-  switch (state.currentSort) {
-    case 'distance':
-      list.sort((a, b) => getDistanceSortValue(a.distance) - getDistanceSortValue(b.distance));
-      break;
-    case 'rating':
-      list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-      break;
-    case 'name':
-      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      break;
-    case 'district':
-      list.sort((a, b) => {
-        const da = a.district_tc || a.district || '\uffff';
-        const db = b.district_tc || b.district || '\uffff';
-        const cmp = da.localeCompare(db, 'zh-Hant');
-        return cmp !== 0 ? cmp : getDistanceSortValue(a.distance) - getDistanceSortValue(b.distance);
-      });
-      break;
+  if (state.currentSort === 'rating') {
+    list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  } else {
+    state.currentSort = 'distance';
+    list.sort((a, b) => getDistanceSortValue(a.distance) - getDistanceSortValue(b.distance));
   }
 
   state.filtered = list;
@@ -592,7 +733,7 @@ export function renderDiscovery(list) {
 
   if (!section || !scroll || !subtitle) return;
 
-  const rated = list.filter((r) => r.rating && r.rating > 0);
+  const rated = list.filter((r) => Number.isFinite(r.rating) && Number(r.rating) >= 4.7);
 
   if (rated.length === 0) {
     section.style.display = 'none';
@@ -610,9 +751,9 @@ export function renderDiscovery(list) {
 
   if (state.activeCuisine !== 'all') {
     const cuisineLabel = CUISINES.find((c) => c.id === state.activeCuisine);
-    subtitle.textContent = (cuisineLabel ? cuisineLabel.label : '') + '高分餐廳';
+    subtitle.textContent = (cuisineLabel ? cuisineLabel.label : '') + ' 4.7+ 高分餐廳';
   } else {
-    subtitle.textContent = '評分 ' + top[0].rating.toFixed(1) + ' 起';
+    subtitle.textContent = '評分 4.7+';
   }
 
   scroll.innerHTML = top.map(renderDiscoveryCardTemplate).join('');
@@ -871,6 +1012,7 @@ export function showDetail(id) {
         escHtml(r.district_tc || /** @type {string} */ (r.district)) +
         '</span>'
       : '') +
+    renderLocationTrustLabel(r) +
     '</div>' +
     '</div>' +
     photosHtml +
@@ -988,6 +1130,10 @@ export function showDetail(id) {
           '<div class="detail-section" id="detail-hours-section">' +
           hoursHtml +
           '</div>';
+        const addressNode = document.querySelector('#detail-view .detail-address');
+        if (addressNode && updated.address) {
+          addressNode.textContent = updated.address;
+        }
       } else if (result?.status === 'failed') {
         section.innerHTML =
           '<div class="detail-section-title">營業時間</div>' +
@@ -1081,6 +1227,15 @@ export function showDetail(id) {
 
 /** @type {number|null} */
 let _rollInterval = null;
+/** @type {number|null} */
+let _randomAutoStartTimer = null;
+
+function clearRandomAutoStartTimer() {
+  if (_randomAutoStartTimer) {
+    clearTimeout(_randomAutoStartTimer);
+    _randomAutoStartTimer = null;
+  }
+}
 
 /**
  * Open the random picker overlay.
@@ -1090,25 +1245,99 @@ let _rollInterval = null;
  */
 export function openRandomPick() {
   const overlay = document.getElementById('random-overlay');
+  const setup = document.getElementById('random-setup');
   const footer = document.getElementById('random-footer');
+  const body = document.getElementById('random-body');
+  const subtitle = document.getElementById('random-subtitle');
+  const queryInput = document.getElementById('random-query-input');
+  const modeButtons = document.querySelectorAll('#random-mode-bar .random-mode-btn');
+  const scopeButtons = document.querySelectorAll('#random-scope-bar .random-scope-btn');
 
-  if (!overlay || !footer) return;
+  if (!overlay || !footer || !body) return;
 
-  const candidates =
-    state.filtered.length > 0 ? state.filtered : state.placesData;
+  const settings = getRandomPickSettings();
+
+  overlay.classList.add('active');
+  overlay.dataset.randomMode = settings.mode;
+  overlay.dataset.randomQuery = settings.query;
+  overlay.dataset.randomScope = settings.scope;
+  const autoStart = !setup;
+  if (setup) setup.style.display = '';
+  footer.style.display = 'none';
+  body.style.display = '';
+  if (subtitle) {
+    subtitle.textContent = autoStart ? '讓我幫你決定！' : '先揀模式，再開始抽';
+  }
+
+  if (queryInput) {
+    queryInput.value = settings.query;
+  }
+  modeButtons.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.randomMode === settings.mode);
+  });
+  scopeButtons.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.randomScope === settings.scope);
+  });
+
+  clearRandomAutoStartTimer();
+  if (autoStart) {
+    startRandomPick();
+  } else {
+    _randomAutoStartTimer = setTimeout(() => {
+      _randomAutoStartTimer = null;
+      const currentOverlay = document.getElementById('random-overlay');
+      if (!currentOverlay || !currentOverlay.classList.contains('active')) return;
+      startRandomPick();
+    }, 900);
+  }
+}
+
+/**
+ * Start the random picker using the current setup state.
+ */
+export function startRandomPick() {
+  const overlay = document.getElementById('random-overlay');
+  const setup = document.getElementById('random-setup');
+  const footer = document.getElementById('random-footer');
+  const body = document.getElementById('random-body');
+  const subtitle = document.getElementById('random-subtitle');
+
+  if (!overlay || !footer || !body) return;
+
+  clearRandomAutoStartTimer();
+  const settings = getRandomPickSettings();
+  const candidates = getRandomPickCandidates(settings.mode, settings.query, settings.scope);
 
   if (candidates.length === 0) {
     if (_callbacks.onShowToast) {
-      _callbacks.onShowToast('暫無餐廳可選');
+      _callbacks.onShowToast('暫無可用餐廳');
     }
     return;
   }
 
+  state.randomPickMode = settings.mode;
+  state.randomPickQuery = settings.query;
+  state.randomPickScope = settings.scope;
   overlay.classList.add('active');
+  overlay.dataset.randomMode = settings.mode;
+  overlay.dataset.randomQuery = settings.query;
+  overlay.dataset.randomScope = settings.scope;
+  if (setup) setup.style.display = 'none';
   footer.style.display = 'none';
+  body.style.display = '';
+
+  if (subtitle) {
+    if (settings.mode === 'keyword' && settings.query) {
+      subtitle.textContent = `幫你搵「${settings.query}」`;
+    } else if (settings.mode === 'favorites') {
+      subtitle.textContent = '收藏盲選，交俾我';
+    } else {
+      subtitle.textContent = settings.scope === 'walkable' ? '附近步行可達優先' : '讓我幫你決定！';
+    }
+  }
 
   let rollCount = 0;
-  const maxRolls = 20;
+  const maxRolls = RANDOM_PICK_ROLL_COUNT;
   const rollingNameEl = document.getElementById('random-rolling-name');
 
   _rollInterval = setInterval(() => {
@@ -1124,7 +1353,11 @@ export function openRandomPick() {
       _rollInterval = null;
       showRandomResult(candidates);
     }
-  }, 80);
+  }, RANDOM_PICK_ROLL_INTERVAL_MS);
+
+  if (rollingNameEl && candidates.length > 0) {
+    rollingNameEl.textContent = candidates[0].name || '未知餐廳';
+  }
 }
 
 /**
@@ -1147,6 +1380,8 @@ export function showRandomResult(candidates) {
   if (district) detailParts.push(district);
   if (dist) detailParts.push(dist);
   if (r.price_level) detailParts.push(priceLevel(r.price_level));
+  if (r.location_status === 'approximate') detailParts.push('座標約略');
+  if (r.location_status === 'missing') detailParts.push('未標示位置');
 
   if (body) body.style.display = 'none';
   if (footer) footer.style.display = '';
@@ -1173,6 +1408,9 @@ export function showRandomResult(candidates) {
           : '')
       : '<span style="color:var(--text-muted);">暫無評分</span>';
   }
+  if (subtitle) {
+    subtitle.textContent = '找到了！';
+  }
 }
 
 /**
@@ -1182,6 +1420,12 @@ export function closeRandomPick() {
   const overlay = document.getElementById('random-overlay');
   if (overlay) overlay.classList.remove('active');
   state.randomPickResult = null;
+  clearRandomAutoStartTimer();
+  if (overlay) {
+    overlay.dataset.randomMode = '';
+    overlay.dataset.randomQuery = '';
+    overlay.dataset.randomScope = '';
+  }
   if (_rollInterval) {
     clearInterval(_rollInterval);
     _rollInterval = null;
@@ -1192,37 +1436,14 @@ export function closeRandomPick() {
  * Reroll the random picker (show a new random result).
  */
 export function rerollRandom() {
-  const candidates =
-    state.filtered.length > 0 ? state.filtered : state.placesData;
-
-  if (candidates.length === 0) return;
-
-  const body = document.getElementById('random-body');
-  const footer = document.getElementById('random-footer');
-  const subtitle = document.getElementById('random-subtitle');
-  const rollingNameEl = document.getElementById('random-rolling-name');
-
-  if (body) body.style.display = '';
-  if (footer) footer.style.display = 'none';
-  if (subtitle) subtitle.textContent = '再選一次...';
-
-  let rollCount = 0;
-  const maxRolls = 15;
-
-  _rollInterval = setInterval(() => {
-    const randomIdx = Math.floor(Math.random() * candidates.length);
-    const r = candidates[randomIdx];
-    if (rollingNameEl) {
-      rollingNameEl.textContent = r.name || '未知餐廳';
-    }
-    rollCount++;
-
-    if (rollCount >= maxRolls) {
-      clearInterval(_rollInterval);
-      _rollInterval = null;
-      showRandomResult(candidates);
-    }
-  }, 70);
+  const overlay = document.getElementById('random-overlay');
+  const mode = overlay?.dataset.randomMode || state.randomPickMode || 'walkable';
+  const query = overlay?.dataset.randomQuery || state.randomPickQuery || '';
+  const scope = overlay?.dataset.randomScope || state.randomPickScope || 'walkable';
+  state.randomPickMode = mode;
+  state.randomPickQuery = query;
+  state.randomPickScope = scope;
+  startRandomPick();
 }
 
 // ---------------------------------------------------------------------------
@@ -1231,6 +1452,62 @@ export function rerollRandom() {
 
 /** Current favorites sort mode. */
 export let favSortMode = 'recent';
+
+const DEFAULT_LOCATION_GROUPS = [
+  {
+    id: 'hong_kong_island',
+    label: '港島',
+    locations: [
+      { id: 'central', label: '中環', lat: 22.2808, lng: 114.1588, isDefault: true },
+      { id: 'causeway_bay', label: '銅鑼灣', lat: 22.2783, lng: 114.1825, isDefault: true },
+      { id: 'quarry_bay', label: '鰂魚涌', lat: 22.2855, lng: 114.2158, isDefault: true },
+      { id: 'wan_chai', label: '灣仔', lat: 22.2776, lng: 114.1729, isDefault: true },
+      { id: 'sheung_wan', label: '上環', lat: 22.2866, lng: 114.1516, isDefault: true },
+      { id: 'admiralty', label: '金鐘', lat: 22.2794, lng: 114.1650, isDefault: true },
+      { id: 'north_point', label: '北角', lat: 22.2915, lng: 114.2003, isDefault: true },
+      { id: 'eastern', label: '柴灣', lat: 22.2674, lng: 114.2411, isDefault: true },
+      { id: 'southern', label: '海怡 / 黃竹坑', lat: 22.2495, lng: 114.1640, isDefault: true },
+    ],
+  },
+  {
+    id: 'kowloon',
+    label: '九龍',
+    locations: [
+      { id: 'mong_kok', label: '旺角', lat: 22.3193, lng: 114.1694, isDefault: true },
+      { id: 'tsim_sha_tsui', label: '尖沙咀', lat: 22.2977, lng: 114.1728, isDefault: true },
+      { id: 'yau_mai_tei', label: '油麻地', lat: 22.3068, lng: 114.1715, isDefault: true },
+      { id: 'kowloon_city', label: '九龍城', lat: 22.3313, lng: 114.1896, isDefault: true },
+      { id: 'sham_shui_po', label: '深水埗', lat: 22.3326, lng: 114.1621, isDefault: true },
+      { id: 'wong_tai_sin', label: '黃大仙', lat: 22.3419, lng: 114.1923, isDefault: true },
+      { id: 'kwun_tong', label: '觀塘', lat: 22.3141, lng: 114.2256, isDefault: true },
+      { id: 'lam_tin', label: '藍田 / 油塘', lat: 22.3019, lng: 114.2350, isDefault: true },
+    ],
+  },
+  {
+    id: 'new_territories',
+    label: '新界',
+    locations: [
+      { id: 'shatin', label: '沙田', lat: 22.3813, lng: 114.1880, isDefault: true },
+      { id: 'tsuen_wan', label: '荃灣', lat: 22.3709, lng: 114.1095, isDefault: true },
+      { id: 'tuen_mun', label: '屯門', lat: 22.3914, lng: 113.9799, isDefault: true },
+      { id: 'yuen_long', label: '元朗', lat: 22.4452, lng: 114.0222, isDefault: true },
+      { id: 'tai_po', label: '大埔', lat: 22.4458, lng: 114.1656, isDefault: true },
+      { id: 'north', label: '上水 / 粉嶺', lat: 22.5007, lng: 114.1262, isDefault: true },
+      { id: 'sai_kung', label: '西貢', lat: 22.3816, lng: 114.2724, isDefault: true },
+      { id: 'kwai_tsing', label: '葵青', lat: 22.3544, lng: 114.1271, isDefault: true },
+    ],
+  },
+  {
+    id: 'islands',
+    label: '離島',
+    locations: [
+      { id: 'islands', label: '離島', lat: 22.2670, lng: 113.9760, isDefault: true },
+      { id: 'tung_chung', label: '東涌', lat: 22.2898, lng: 113.9407, isDefault: true },
+      { id: 'cheung_chau', label: '長洲', lat: 22.2040, lng: 114.0290, isDefault: true },
+      { id: 'mui_wo', label: '梅窩', lat: 22.2649, lng: 114.0001, isDefault: true },
+    ],
+  },
+];
 
 /**
  * Show the favorites page.
@@ -1370,35 +1647,72 @@ export function showLocationModal(defaultLocationsOrCallback, maybeOnSelectLocat
 
   const defaultContainer = document.getElementById('loc-list');
   if (defaultContainer) {
-    if (defaultLocations.length === 0) {
-      defaultContainer.innerHTML = '';
-    } else {
-      defaultContainer.innerHTML = defaultLocations
-        .map((loc) => {
+    const grouped = [];
+    if (defaultLocations.length > 0) {
+      const legacyQuickIds = ['central', 'causeway_bay', 'mong_kok', 'tsim_sha_tsui', 'quarry_bay'];
+      const quickLocations = legacyQuickIds
+        .map((id) => defaultLocations.find((loc) => loc.id === id))
+        .filter(Boolean);
+      grouped.push(
+        '<div class="loc-group" data-group="legacy-quick">' +
+        '<div class="loc-group-title">快捷地點</div>' +
+        '<div class="loc-group-grid">' +
+        quickLocations.map((loc) => {
           const isCurrent = state.currentLocation && state.currentLocation.id === loc.id;
           return (
-            '<div class="loc-item" data-location-id="' +
+            '<button type="button" class="loc-item loc-default-item" data-location-id="' +
             escAttr(loc.id) +
             '">' +
-            '<div style="display:flex;align-items:center;flex:1;min-width:0;">' +
-            '<div style="margin-right:8px;width:8px;height:8px;border-radius:50%;background:var(--brand);flex-shrink:0;"></div>' +
-            '<div><div class="loc-item-name">' +
-            escHtml(loc.label) +
-            '</div></div>' +
+            '<div class="loc-item-main">' +
+            '<div class="loc-item-name">' + escHtml(loc.label) + '</div>' +
             '</div>' +
-            (isCurrent ? '<span style="color:var(--brand);">目前</span>' : '') +
-            '</div>'
+            (isCurrent ? '<span class="loc-current">目前</span>' : '') +
+            '</button>'
           );
-        })
-        .join('');
-
-      defaultContainer.querySelectorAll('.loc-item').forEach((item) => {
-        item.addEventListener('click', () => {
-          const loc = defaultLocations.find((l) => l.id === item.dataset.locationId);
-          if (loc && onSelectLocation) onSelectLocation(loc);
-        });
-      });
+        }).join('') +
+        '</div>' +
+        '</div>'
+      );
     }
+
+    DEFAULT_LOCATION_GROUPS.forEach((group) => {
+      const groupLocations = (group.locations || []).filter((loc) => {
+        if (defaultLocations.length === 0) return true;
+        return defaultLocations.some((item) => item.id === loc.id);
+      });
+      if (groupLocations.length === 0) return;
+      grouped.push(
+        '<div class="loc-group" data-group="' + escAttr(group.id) + '">' +
+        '<div class="loc-group-title">' + escHtml(group.label) + '</div>' +
+        '<div class="loc-group-grid">' +
+        groupLocations
+          .map((loc) => {
+            const isCurrent = state.currentLocation && state.currentLocation.id === loc.id;
+            return (
+              '<button type="button" class="loc-region-item" data-location-id="' +
+              escAttr(loc.id) +
+              '">' +
+              '<div class="loc-item-main">' +
+              '<div class="loc-item-name">' + escHtml(loc.label) + '</div>' +
+              '</div>' +
+              (isCurrent ? '<span class="loc-current">目前</span>' : '') +
+              '</button>'
+            );
+          })
+          .join('') +
+        '</div>' +
+        '</div>'
+      );
+    });
+
+    defaultContainer.innerHTML = grouped.join('') || '<div style="font-size:12px;color:var(--text-muted);padding:4px 0;">尚未提供預設地點</div>';
+
+    defaultContainer.querySelectorAll('[data-location-id]').forEach((item) => {
+      item.addEventListener('click', () => {
+        const loc = defaultLocations.find((l) => l.id === item.dataset.locationId);
+        if (loc && onSelectLocation) onSelectLocation(loc);
+      });
+    });
   }
 
   const customContainer = document.getElementById('custom-loc-list');
@@ -1412,18 +1726,14 @@ export function showLocationModal(defaultLocationsOrCallback, maybeOnSelectLocat
           const isCurrent =
             state.currentLocation && state.currentLocation.id === cl.id;
           return (
-            '<div class="loc-item" data-custom-id="' +
+            '<div class="loc-custom-item" data-custom-id="' +
             escAttr(cl.id) +
             '">' +
-            '<div style="display:flex;align-items:center;flex:1;min-width:0;">' +
-            '<div style="margin-right:8px;width:8px;height:8px;border-radius:50%;background:var(--brand);flex-shrink:0;"></div>' +
-            '<div>' +
-            '<div class="loc-item-name">' +
-            escHtml(cl.label) +
+            '<div class="loc-item-main">' +
+            '<div class="loc-item-name">' + escHtml(cl.label) + '</div>' +
+            (cl.address ? '<div class="loc-item-sub">' + escHtml(cl.address) + '</div>' : '') +
             '</div>' +
-            '</div>' +
-            '</div>' +
-            (isCurrent ? '<span style="color:var(--brand);">目前</span>' : '') +
+            (isCurrent ? '<span class="loc-current">目前</span>' : '') +
             '<button class="loc-item-delete" data-del-id="' +
             escAttr(cl.id) +
             '">×</button>' +
@@ -1432,14 +1742,14 @@ export function showLocationModal(defaultLocationsOrCallback, maybeOnSelectLocat
         })
         .join('');
 
-      customContainer.querySelectorAll('.loc-item').forEach((item) => {
+      customContainer.querySelectorAll('.loc-custom-item').forEach((item) => {
         item.addEventListener('click', (e) => {
           const target = /** @type {HTMLElement} */ (e.target);
           if (target.classList.contains('loc-item-delete')) {
             e.stopPropagation();
             const delId = target.dataset.delId;
             Store.removeCustomLocation(delId);
-            showLocationModal(onSelectLocation);
+            showLocationModal(defaultLocations, onSelectLocation);
             return;
           }
           const cl = customLocs.find(

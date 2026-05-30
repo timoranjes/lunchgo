@@ -59,4 +59,15 @@ test.describe('Startup bootstrap', () => {
     await page.locator('#loc-modal').click({ position: { x: 10, y: 10 } });
     await expect(page.locator('#loc-modal')).not.toHaveClass(/active/);
   });
+
+  test('should expose the Google stub hooks for deterministic enrichment tests', async ({ page }) => {
+    await page.goto('/');
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const stub = window.__lunchgoGoogleStub;
+        return !!stub && typeof stub.nearbySearch === 'function' && typeof stub.textSearch === 'function' && typeof stub.getDetails === 'function';
+      });
+    }).toBe(true);
+  });
 });

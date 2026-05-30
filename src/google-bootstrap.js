@@ -49,9 +49,15 @@
 
   function getStubRegistry() {
     window.__lunchgoGoogleStub = window.__lunchgoGoogleStub || {
-      nearbySearch: null,
-      textSearch: null,
-      getDetails: null,
+      nearbySearch() {
+        return { status: 'ZERO_RESULTS', results: [] };
+      },
+      textSearch() {
+        return { status: 'ZERO_RESULTS', results: [] };
+      },
+      getDetails() {
+        return { status: 'ZERO_RESULTS', details: null };
+      },
     };
     return window.__lunchgoGoogleStub;
   }
@@ -69,6 +75,21 @@
     }
 
     callback(payload, status);
+  }
+
+  function resolveRegistryResponse(methodName, request, fallbackKind) {
+    const registry = getStubRegistry();
+    const handler = registry[methodName];
+    if (typeof handler === 'function') {
+      return handler(request);
+    }
+
+    const fallback = registry[fallbackKind];
+    if (typeof fallback === 'function') {
+      return fallback(request);
+    }
+
+    return null;
   }
 
   class StubMap {
@@ -153,27 +174,27 @@
     constructor() {}
 
     nearbySearch(request, callback) {
-      const registry = getStubRegistry();
-      if (typeof registry.nearbySearch === 'function') {
-        deliverStubResponse(callback, registry.nearbySearch(request), 'results');
+      const response = resolveRegistryResponse('nearbySearch', request, 'search');
+      if (response) {
+        deliverStubResponse(callback, response, 'results');
         return;
       }
       callback([], 'ZERO_RESULTS');
     }
 
     textSearch(request, callback) {
-      const registry = getStubRegistry();
-      if (typeof registry.textSearch === 'function') {
-        deliverStubResponse(callback, registry.textSearch(request), 'results');
+      const response = resolveRegistryResponse('textSearch', request, 'search');
+      if (response) {
+        deliverStubResponse(callback, response, 'results');
         return;
       }
       callback([], 'ZERO_RESULTS');
     }
 
     getDetails(request, callback) {
-      const registry = getStubRegistry();
-      if (typeof registry.getDetails === 'function') {
-        deliverStubResponse(callback, registry.getDetails(request), 'details');
+      const response = resolveRegistryResponse('getDetails', request, 'details');
+      if (response) {
+        deliverStubResponse(callback, response, 'details');
         return;
       }
       callback(null, 'ZERO_RESULTS');

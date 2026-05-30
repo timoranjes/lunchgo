@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 
+test.describe.configure({ mode: 'serial' });
+
 test.describe('Location Management', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for initial load to complete
-    await Promise.race([
-      page.waitForSelector('#rest-list:not(:empty)', { timeout: 10000 }),
-      page.waitForSelector('#error-banner.show', { timeout: 10000 })
-    ]);
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    // Wait for the first results batch or the error banner to appear.
+    await page.waitForSelector('#rest-list .rest-card, #error-banner.show', { timeout: 20000 });
+    await page.waitForSelector('#loading-state', { state: 'attached' });
   });
 
   test('should show location modal when clicking location button', async ({ page }) => {
@@ -34,7 +34,7 @@ test.describe('Location Management', () => {
     expect(locTexts.some(text => text.includes('鰂魚涌'))).toBe(true);
     
     // Verify current location is marked (should be 中環 initially)
-    const centralItem = locList.locator('.loc-item', { hasText: '中環' });
+    const centralItem = locList.locator('.loc-item', { hasText: '中環' }).first();
     await expect(centralItem).toContainText('目前');
   });
   

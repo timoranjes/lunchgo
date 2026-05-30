@@ -2,12 +2,9 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Search Functionality', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for initial load to complete
-    await Promise.race([
-      page.waitForSelector('#rest-list:not(:empty)', { timeout: 10000 }),
-      page.waitForSelector('#error-banner.show', { timeout: 10000 })
-    ]);
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    // Wait for the first results batch or the error banner to appear.
+    await page.waitForSelector('#rest-list .rest-card, #error-banner.show', { timeout: 20000 });
   });
 
   test('should filter restaurants when typing in search input', async ({ page }) => {
@@ -25,10 +22,10 @@ test.describe('Search Functionality', () => {
     
     // Verify search clear button appears
     await expect(searchClear).toBeVisible();
-    
-    // Wait for results to update
-    await page.waitForTimeout(300); // Allow debounce time
-    
+
+    // Wait for the filtered list to settle.
+    await expect.poll(async () => resultList.locator('.rest-card').count()).toBeLessThanOrEqual(initialCount);
+
     // Verify results are filtered
     const filteredCount = await resultList.locator('.rest-card').count();
     expect(filteredCount).toBeLessThanOrEqual(initialCount);
@@ -48,9 +45,9 @@ test.describe('Search Functionality', () => {
     
     // Verify search clear button is hidden
     await expect(searchClear).not.toBeVisible();
-    
-    // Wait for results to revert to original
-    await page.waitForTimeout(300);
+
+    // Wait for results to revert to the original list size.
+    await expect.poll(async () => resultList.locator('.rest-card').count()).toBe(initialCount);
     const finalCount = await resultList.locator('.rest-card').count();
     expect(finalCount).toBe(initialCount);
   });
@@ -62,10 +59,7 @@ test.describe('Search Functionality', () => {
     
     // Type a query that should return no results
     await searchInput.fill('xyz123nonexistent');
-    
-    // Wait for results to update
-    await page.waitForTimeout(300);
-    
+
     // Verify empty state is shown
     await expect(emptyState).toBeVisible();
     await expect(emptyState).toContainText('找不到餐廳');

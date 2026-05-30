@@ -20,6 +20,7 @@ import {
   showDetail,
   patchRestaurantCard,
   openRandomPick,
+  startRandomPick,
   closeRandomPick,
   rerollRandom,
   renderFavorites,
@@ -39,14 +40,34 @@ const GOOGLE_MAPS_API_KEY = 'AIzaSyBN_pMA5dYGC70sS4OnoYALDszrTUUpjkM';
 
 const DEFAULT_LOCATIONS = [
   { id: 'central', label: '中環', lat: 22.2808, lng: 114.1588, isDefault: true },
-  { id: 'causeway_bay', label: '銅鑼灣', lat: 22.2783, lng: 114.1825 },
-  { id: 'mong_kok', label: '旺角', lat: 22.3193, lng: 114.1694 },
-  { id: 'tsim_sha_tsui', label: '尖沙咀', lat: 22.2977, lng: 114.1728 },
-  { id: 'quarry_bay', label: '鰂魚涌', lat: 22.2855, lng: 114.2158 },
+  { id: 'causeway_bay', label: '銅鑼灣', lat: 22.2783, lng: 114.1825, isDefault: true },
+  { id: 'quarry_bay', label: '鰂魚涌', lat: 22.2855, lng: 114.2158, isDefault: true },
+  { id: 'wan_chai', label: '灣仔', lat: 22.2776, lng: 114.1729, isDefault: true },
+  { id: 'sheung_wan', label: '上環', lat: 22.2866, lng: 114.1516, isDefault: true },
+  { id: 'admiralty', label: '金鐘', lat: 22.2794, lng: 114.1650, isDefault: true },
+  { id: 'north_point', label: '北角', lat: 22.2915, lng: 114.2003, isDefault: true },
+  { id: 'mong_kok', label: '旺角', lat: 22.3193, lng: 114.1694, isDefault: true },
+  { id: 'tsim_sha_tsui', label: '尖沙咀', lat: 22.2977, lng: 114.1728, isDefault: true },
+  { id: 'yau_mai_tei', label: '油麻地', lat: 22.3068, lng: 114.1715, isDefault: true },
+  { id: 'kowloon_city', label: '九龍城', lat: 22.3313, lng: 114.1896, isDefault: true },
+  { id: 'sham_shui_po', label: '深水埗', lat: 22.3326, lng: 114.1621, isDefault: true },
+  { id: 'wong_tai_sin', label: '黃大仙', lat: 22.3419, lng: 114.1923, isDefault: true },
+  { id: 'kwun_tong', label: '觀塘', lat: 22.3141, lng: 114.2256, isDefault: true },
+  { id: 'shatin', label: '沙田', lat: 22.3813, lng: 114.1880, isDefault: true },
+  { id: 'tsuen_wan', label: '荃灣', lat: 22.3709, lng: 114.1095, isDefault: true },
+  { id: 'tuen_mun', label: '屯門', lat: 22.3914, lng: 113.9799, isDefault: true },
+  { id: 'yuen_long', label: '元朗', lat: 22.4452, lng: 114.0222, isDefault: true },
+  { id: 'tai_po', label: '大埔', lat: 22.4458, lng: 114.1656, isDefault: true },
+  { id: 'north', label: '上水 / 粉嶺', lat: 22.5007, lng: 114.1262, isDefault: true },
+  { id: 'sai_kung', label: '西貢', lat: 22.3816, lng: 114.2724, isDefault: true },
+  { id: 'kwai_tsing', label: '葵青', lat: 22.3544, lng: 114.1271, isDefault: true },
+  { id: 'islands', label: '離島', lat: 22.2670, lng: 113.9760, isDefault: true },
+  { id: 'tung_chung', label: '東涌', lat: 22.2898, lng: 113.9407, isDefault: true },
 ];
 
 const ENRICHMENT_QUEUE_CONCURRENCY = 1;
 const ENRICHMENT_QUEUE_DELAY_MS = 120;
+const LOC_AUTOSUGGEST_DEBOUNCE_MS = 220;
 
 const enrichmentQueueState = {
   pending: new Set(),
@@ -54,6 +75,382 @@ const enrichmentQueueState = {
   lastRun: 0,
   currentDetailId: '',
 };
+
+const defaultLocationGroups = [
+  {
+    id: 'hong_kong_island',
+    label: '港島',
+    locations: DEFAULT_LOCATIONS.filter((loc) =>
+      ['central', 'causeway_bay', 'quarry_bay', 'wan_chai', 'sheung_wan', 'admiralty', 'north_point'].includes(loc.id)
+    ),
+  },
+  {
+    id: 'kowloon',
+    label: '九龍',
+    locations: DEFAULT_LOCATIONS.filter((loc) =>
+      ['mong_kok', 'tsim_sha_tsui', 'yau_mai_tei', 'kowloon_city', 'sham_shui_po', 'wong_tai_sin', 'kwun_tong'].includes(loc.id)
+    ),
+  },
+  {
+    id: 'new_territories',
+    label: '新界',
+    locations: DEFAULT_LOCATIONS.filter((loc) =>
+      ['shatin', 'tsuen_wan', 'tuen_mun', 'yuen_long', 'tai_po', 'north', 'sai_kung', 'kwai_tsing'].includes(loc.id)
+    ),
+  },
+  {
+    id: 'islands',
+    label: '離島',
+    locations: DEFAULT_LOCATIONS.filter((loc) =>
+      ['islands', 'tung_chung'].includes(loc.id)
+    ),
+  },
+];
+
+function getDefaultLocationGroups() {
+  return defaultLocationGroups.map((group) => ({
+    ...group,
+    locations: group.locations.slice(),
+  }));
+}
+
+let customLocationAutocomplete = null;
+let customLocationPreviewMap = null;
+let customLocationPreviewMarker = null;
+let customLocationMapPickListener = null;
+let customLocationDraft = null;
+let customLocationResolveTimer = null;
+
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim();
+}
+
+function parsePlaceLabel(place) {
+  return normalizeText(place?.name || place?.formatted_address || place?.vicinity || '');
+}
+
+function formatLocationAddress(place) {
+  return normalizeText(place?.formatted_address || place?.vicinity || place?.name || '');
+}
+
+function resetCustomLocationDraft() {
+  customLocationDraft = {
+    label: '',
+    address: '',
+    place_id: '',
+    lat: null,
+    lng: null,
+    source: 'manual',
+  };
+  updateCustomLocationPreview();
+}
+
+function ensureCustomLocationPreviewMap() {
+  if (customLocationPreviewMap || !ensureMapsServices()) return customLocationPreviewMap;
+  const previewEl = document.getElementById('custom-loc-map-preview');
+  if (!previewEl || typeof google === 'undefined') return null;
+  customLocationPreviewMap = new google.maps.Map(previewEl, {
+    center: { lat: 22.3, lng: 114.17 },
+    zoom: 15,
+    zoomControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
+    mapTypeControl: false,
+  });
+  customLocationPreviewMarker = new google.maps.Marker({
+    position: { lat: 22.3, lng: 114.17 },
+    map: customLocationPreviewMap,
+  });
+  return customLocationPreviewMap;
+}
+
+function updateCustomLocationPreview() {
+  const titleEl = document.getElementById('custom-loc-preview-title');
+  const subEl = document.getElementById('custom-loc-preview-address');
+  const previewEl = document.getElementById('custom-loc-preview');
+
+  if (titleEl) {
+    titleEl.textContent = customLocationDraft?.label || '等待解析地址';
+  }
+  if (subEl) {
+    const parts = [];
+    if (customLocationDraft?.address) parts.push(customLocationDraft.address);
+    if (customLocationDraft?.place_id) parts.push('地點 ID: ' + customLocationDraft.place_id);
+    if (customLocationDraft?.lat != null && customLocationDraft?.lng != null) {
+      parts.push(customLocationDraft.lat.toFixed(6) + ', ' + customLocationDraft.lng.toFixed(6));
+    }
+    subEl.textContent = parts.length > 0
+      ? parts.join(' · ')
+      : '輸入名稱和地址後，我們會幫你補全座標並確認位置。';
+  }
+  if (previewEl) {
+    previewEl.classList.toggle('is-ready', !!(customLocationDraft && customLocationDraft.lat != null && customLocationDraft.lng != null));
+  }
+
+  const previewMap = ensureCustomLocationPreviewMap();
+  if (previewMap && customLocationDraft && customLocationDraft.lat != null && customLocationDraft.lng != null) {
+    previewMap.setCenter({ lat: customLocationDraft.lat, lng: customLocationDraft.lng });
+    previewMap.setZoom(16);
+    if (!customLocationPreviewMarker) {
+      customLocationPreviewMarker = new google.maps.Marker({
+        position: { lat: customLocationDraft.lat, lng: customLocationDraft.lng },
+        map: previewMap,
+      });
+    } else if (typeof customLocationPreviewMarker.setPosition === 'function') {
+      customLocationPreviewMarker.setMap(previewMap);
+      customLocationPreviewMarker.setPosition({ lat: customLocationDraft.lat, lng: customLocationDraft.lng });
+    } else {
+      customLocationPreviewMarker = new google.maps.Marker({
+        position: { lat: customLocationDraft.lat, lng: customLocationDraft.lng },
+        map: previewMap,
+      });
+    }
+  }
+}
+
+function renderCustomLocationSuggestions(results = []) {
+  const container = document.getElementById('custom-loc-suggestions');
+  if (!container) return;
+  if (!Array.isArray(results) || results.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = results.slice(0, 5).map((place) => {
+    const name = parsePlaceLabel(place);
+    const address = formatLocationAddress(place);
+    return (
+      '<button type="button" class="loc-search-result-item" data-place-id="' +
+      (place.place_id || '') +
+      '">' +
+      '<div class="loc-search-result-name">' + name + '</div>' +
+      '<div class="loc-search-result-sub">' + address + '</div>' +
+      '</button>'
+    );
+  }).join('');
+
+  container.querySelectorAll('.loc-search-result-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const placeId = btn.dataset.placeId;
+      const input = document.getElementById('custom-loc-search');
+      if (!placeId || !state.placesService || !input) return;
+      state.placesService.getDetails({
+        placeId,
+        fields: ['place_id', 'name', 'formatted_address', 'geometry'],
+      }, (place, status) => {
+        if (status === 'OK' && place) {
+          resolveCustomLocationFromPlace(place, 'suggestion');
+          input.value = formatLocationAddress(place);
+          const nameInput = document.getElementById('custom-loc-name');
+          if (nameInput && !normalizeText(nameInput.value)) {
+            nameInput.value = parsePlaceLabel(place);
+          }
+          updateCustomLocationPreview();
+        }
+      });
+    });
+  });
+}
+
+function setCustomLocationDraft(nextDraft) {
+  customLocationDraft = {
+    label: normalizeText(nextDraft?.label || customLocationDraft?.label || ''),
+    address: normalizeText(nextDraft?.address || customLocationDraft?.address || ''),
+    place_id: normalizeText(nextDraft?.place_id || customLocationDraft?.place_id || ''),
+    lat: Number.isFinite(nextDraft?.lat) ? Number(nextDraft.lat) : customLocationDraft?.lat ?? null,
+    lng: Number.isFinite(nextDraft?.lng) ? Number(nextDraft.lng) : customLocationDraft?.lng ?? null,
+    source: normalizeText(nextDraft?.source || customLocationDraft?.source || 'manual') || 'manual',
+  };
+  updateCustomLocationPreview();
+}
+
+function resolveCustomLocationFromPlace(place, source = 'autocomplete') {
+  if (!place) return;
+  const location = place.geometry?.location;
+  const lat = location && typeof location.lat === 'function' ? location.lat() : null;
+  const lng = location && typeof location.lng === 'function' ? location.lng() : null;
+  setCustomLocationDraft({
+    label: parsePlaceLabel(place),
+    address: formatLocationAddress(place),
+    place_id: place.place_id || '',
+    lat,
+    lng,
+    source,
+  });
+}
+
+function geocodeCustomLocation(query, source = 'geocode', onResolved = null) {
+  const cleanQuery = normalizeText(query);
+  if (!cleanQuery || !state.geocoder) return;
+
+  if (customLocationResolveTimer) {
+    clearTimeout(customLocationResolveTimer);
+  }
+
+  customLocationResolveTimer = setTimeout(() => {
+    state.geocoder.geocode({ address: cleanQuery, region: 'hk' }, (results, status) => {
+      if (status !== 'OK' || !results || !results[0]) {
+        showToast('暫時未能解析地址，請改用更完整的名稱');
+        return;
+      }
+      resolveCustomLocationFromPlace(results[0], source);
+      const nameInput = document.getElementById('custom-loc-name');
+      if (nameInput && !normalizeText(nameInput.value)) {
+        nameInput.value = parsePlaceLabel(results[0]) || cleanQuery;
+      }
+      const searchInput = document.getElementById('custom-loc-search');
+      if (searchInput) {
+        searchInput.value = formatLocationAddress(results[0]) || cleanQuery;
+      }
+      if (typeof onResolved === 'function') {
+        onResolved(results[0]);
+      }
+    });
+  }, 250);
+}
+
+function bindCustomLocationAutocomplete() {
+  if (!ensureMapsServices()) return;
+  const input = document.getElementById('custom-loc-search');
+  if (!input || customLocationAutocomplete) return;
+
+  customLocationAutocomplete = new google.maps.places.Autocomplete(input, {
+    types: ['geocode'],
+    componentRestrictions: { country: 'hk' },
+  });
+  customLocationAutocomplete.addListener('place_changed', () => {
+    const place = customLocationAutocomplete.getPlace();
+    if (!place) return;
+    resolveCustomLocationFromPlace(place, 'autocomplete');
+    renderCustomLocationSuggestions([]);
+    const nameInput = document.getElementById('custom-loc-name');
+    if (nameInput && !normalizeText(nameInput.value)) {
+      nameInput.value = parsePlaceLabel(place);
+    }
+  });
+}
+
+function openCustomLocationModal(options = {}) {
+  const preserveDraft = !!options.preserveDraft;
+  const modal = document.getElementById('add-loc-modal');
+  if (!modal) return;
+  modal.classList.add('active');
+  const nameInput = document.getElementById('custom-loc-name');
+  const searchInput = document.getElementById('custom-loc-search');
+  if (!preserveDraft) {
+    if (nameInput) nameInput.value = '';
+    if (searchInput) searchInput.value = '';
+    resetCustomLocationDraft();
+  }
+  bindCustomLocationAutocomplete();
+  updateCustomLocationPreview();
+  renderCustomLocationSuggestions([]);
+}
+
+function closeCustomLocationModal() {
+  const modal = document.getElementById('add-loc-modal');
+  if (modal) modal.classList.remove('active');
+  if (customLocationMapPickListener && state.map) {
+    state.map.removeListener('click', customLocationMapPickListener);
+    customLocationMapPickListener = null;
+  }
+}
+
+function saveCustomLocationDraft() {
+  const nameInput = document.getElementById('custom-loc-name');
+  const searchInput = document.getElementById('custom-loc-search');
+  const label = normalizeText(nameInput?.value || customLocationDraft?.label || searchInput?.value || '');
+  const address = normalizeText(customLocationDraft?.address || searchInput?.value || '');
+  const lat = customLocationDraft?.lat;
+  const lng = customLocationDraft?.lng;
+
+  if (!label) {
+    showToast('請先輸入地點名稱');
+    return;
+  }
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    if (searchInput && normalizeText(searchInput.value)) {
+      geocodeCustomLocation(searchInput.value, 'geocode', () => saveCustomLocationDraft());
+    } else if (state.geocoder && nameInput && normalizeText(nameInput.value)) {
+      geocodeCustomLocation(nameInput.value, 'geocode', () => saveCustomLocationDraft());
+    } else {
+      showToast('請先輸入可解析的地址或地標');
+    }
+    return;
+  }
+
+  Store.addCustomLocation({
+    id: 'custom_' + Date.now(),
+    label,
+    address,
+    place_id: customLocationDraft?.place_id || '',
+    lat,
+    lng,
+    source: customLocationDraft?.source || 'manual',
+    isCustom: true,
+  });
+  closeCustomLocationModal();
+  showToast('已新增 ' + label);
+}
+
+function microAdjustCustomLocationOnMap() {
+  if (!ensureMapsServices()) {
+    showToast('地圖服務暫時不可用');
+    return;
+  }
+  if (!Number.isFinite(customLocationDraft?.lat) || !Number.isFinite(customLocationDraft?.lng)) {
+    showToast('請先解析地址，再微調位置');
+    return;
+  }
+
+  const modal = document.getElementById('add-loc-modal');
+  if (modal) modal.classList.remove('active');
+  setView('map');
+  showToast('點擊地圖微調位置');
+
+  if (customLocationMapPickListener && state.map) {
+    state.map.removeListener('click', customLocationMapPickListener);
+    customLocationMapPickListener = null;
+  }
+
+  customLocationMapPickListener = (e) => {
+    const lat = e.latLng.lat();
+    const lng = e.latLng.lng();
+    setCustomLocationDraft({
+      ...(customLocationDraft || {}),
+      lat,
+      lng,
+      source: 'map',
+    });
+    if (state.geocoder) {
+      state.geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === 'OK' && results && results[0]) {
+          setCustomLocationDraft({
+            ...(customLocationDraft || {}),
+            address: results[0].formatted_address || customLocationDraft?.address || '',
+            place_id: results[0].place_id || customLocationDraft?.place_id || '',
+            lat,
+            lng,
+            source: 'map',
+          });
+        }
+        setView('list');
+        openCustomLocationModal({ preserveDraft: true });
+      });
+    } else {
+      setView('list');
+      openCustomLocationModal({ preserveDraft: true });
+    }
+    if (state.map && customLocationMapPickListener) {
+      state.map.removeListener('click', customLocationMapPickListener);
+      customLocationMapPickListener = null;
+    }
+  };
+  state.map.addListener('click', customLocationMapPickListener);
+}
 
 function markRestaurantEnrichment(restaurant, status, extra = {}) {
   if (!restaurant) return;
@@ -623,7 +1020,8 @@ function init() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.toolbar-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      state.currentSort = btn.dataset.sort;
+      const sort = btn.dataset.sort;
+      state.currentSort = sort === 'rating' ? 'rating' : 'distance';
       updateDisplay();
     });
   });
@@ -681,12 +1079,11 @@ function init() {
 
   document.getElementById('add-custom-loc-btn').addEventListener('click', () => {
     hideLocationModal();
-    document.getElementById('add-loc-modal').classList.add('active');
-    document.getElementById('custom-loc-name').value = '';
+    openCustomLocationModal();
   });
 
   document.getElementById('cancel-custom-loc').addEventListener('click', () => {
-    document.getElementById('add-loc-modal').classList.remove('active');
+    closeCustomLocationModal();
   });
 
   document.getElementById('add-loc-modal').addEventListener('click', (e) => {
@@ -708,29 +1105,30 @@ function init() {
           showToast('請輸入地點名稱');
           return;
         }
-        let label = name;
-        const saveAndClose = (finalLabel) => {
-          const loc = {
-            id: 'custom_' + Date.now(),
-            label: finalLabel,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            isCustom: true
-          };
-          Store.addCustomLocation(loc);
-          document.getElementById('add-loc-modal').classList.remove('active');
-          showToast('已新增 ' + finalLabel);
+        const draft = {
+          label: name,
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          source: 'gps',
         };
+        setCustomLocationDraft(draft);
 
         if (state.geocoder) {
           state.geocoder.geocode({ location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }, (results, status) => {
             if (status === 'OK' && results && results[0]) {
-              label = name + ' (' + results[0].formatted_address.split(',')[0].trim() + ')';
+              setCustomLocationDraft({
+                label: name,
+                address: results[0].formatted_address || '',
+                place_id: results[0].place_id || '',
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                source: 'gps',
+              });
             }
-            saveAndClose(label);
+            saveCustomLocationDraft();
           });
         } else {
-          saveAndClose(label);
+          saveCustomLocationDraft();
         }
       },
       () => {
@@ -741,29 +1139,7 @@ function init() {
   });
 
   document.getElementById('custom-loc-map').addEventListener('click', () => {
-    if (!ensureMapsServices()) {
-      showToast('地圖服務暫時不可用');
-      return;
-    }
-    document.getElementById('add-loc-modal').classList.remove('active');
-    setView('map');
-
-    const pickListener = (e) => {
-      const name = document.getElementById('custom-loc-name').value.trim() || '自訂地點';
-      const loc = {
-        id: 'custom_' + Date.now(),
-        label: name,
-        lat: e.latLng.lat(),
-        lng: e.latLng.lng(),
-        isCustom: true
-      };
-      Store.addCustomLocation(loc);
-      state.map.removeListener('click', pickListener);
-      setView('list');
-      showToast('已新增 ' + name);
-    };
-    state.map.addListener('click', pickListener);
-    showToast('點擊地圖選擇位置');
+    microAdjustCustomLocationOnMap();
   });
 
   document.getElementById('fav-btn').addEventListener('click', showFavoritesPage);
@@ -811,6 +1187,8 @@ function init() {
   renderPriceBar();
 
   document.getElementById('random-pick-btn').addEventListener('click', openRandomPick);
+  document.getElementById('random-start').addEventListener('click', startRandomPick);
+  document.getElementById('random-close-setup').addEventListener('click', closeRandomPick);
   document.getElementById('random-close').addEventListener('click', closeRandomPick);
   document.getElementById('random-overlay').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeRandomPick();
@@ -821,6 +1199,74 @@ function init() {
       setDetailEnrichmentTarget(state.randomPickResult.id);
       showDetail(state.randomPickResult.id);
     }
+  });
+
+  document.querySelectorAll('#random-mode-bar .random-mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#random-mode-bar .random-mode-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.randomPickMode = btn.dataset.randomMode;
+      const keywordBlock = document.getElementById('random-keyword-block');
+      if (keywordBlock) {
+        keywordBlock.style.display = state.randomPickMode === 'keyword' ? '' : 'none';
+      }
+    });
+  });
+
+  document.querySelectorAll('#random-scope-bar .random-scope-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#random-scope-bar .random-scope-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.randomPickScope = btn.dataset.randomScope;
+    });
+  });
+
+  const keywordBlock = document.getElementById('random-keyword-block');
+  if (keywordBlock) {
+    keywordBlock.style.display = state.randomPickMode === 'keyword' ? '' : 'none';
+  }
+
+  document.getElementById('custom-loc-save').addEventListener('click', saveCustomLocationDraft);
+
+  document.getElementById('loc-search-input').addEventListener('input', (e) => {
+    const value = e.target.value.trim();
+    const results = document.getElementById('loc-search-results');
+    if (!results) return;
+    if (!value || !state.placesService) {
+      results.innerHTML = '';
+      return;
+    }
+    state.placesService.textSearch({
+      query: value,
+      region: 'hk',
+      type: ['establishment'],
+    }, (places, status) => {
+      if (status !== 'OK' || !Array.isArray(places)) {
+        results.innerHTML = '<div style="padding:10px 12px;color:var(--text-muted);font-size:12px;">暫無結果</div>';
+        return;
+      }
+      results.innerHTML = places.slice(0, 6).map((place) => (
+        '<button type="button" class="loc-search-result-item" data-place-id="' + (place.place_id || '') + '">' +
+          '<div class="loc-search-result-name">' + parsePlaceLabel(place) + '</div>' +
+          '<div class="loc-search-result-sub">' + formatLocationAddress(place) + '</div>' +
+        '</button>'
+      )).join('');
+      results.querySelectorAll('.loc-search-result-item').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const selected = places.find((p) => p.place_id === btn.dataset.placeId);
+          if (selected) {
+            resolveCustomLocationFromPlace(selected, 'location-search');
+            showToast('已選擇 ' + parsePlaceLabel(selected));
+          }
+        });
+      });
+    });
+  });
+
+  document.getElementById('custom-loc-search').addEventListener('input', (e) => {
+    const value = e.target.value.trim();
+    if (!value) return;
+    geocodeCustomLocation(value, 'search');
   });
 
   loadRestaurants();

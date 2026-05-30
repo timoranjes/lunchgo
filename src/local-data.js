@@ -27,6 +27,77 @@ const DEDUP_RADIUS_M = 50;
 /** Base path for district JSON files. */
 const DATA_BASE = 'data/';
 
+/**
+ * Normalize a restaurant name for merge matching.
+ *
+ * Strips punctuation and spaces so "McDonald's" and "Mcdonalds" both map
+ * to the same key while keeping Chinese names intact.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function normalizeRestaurantName(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^0-9a-z\u4e00-\u9fff]+/g, '');
+}
+
+/**
+ * Compare two restaurant names for loose matching.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function nameSimilarityScore(a, b) {
+  const left = normalizeRestaurantName(a);
+  const right = normalizeRestaurantName(b);
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  if (left.includes(right) || right.includes(left)) return 0.95;
+
+  const leftTokens = left.match(/[\u4e00-\u9fff]+|[a-z0-9]+/g) || [];
+  const rightTokens = right.match(/[\u4e00-\u9fff]+|[a-z0-9]+/g) || [];
+  if (leftTokens.length === 0 || rightTokens.length === 0) return 0;
+
+  const rightSet = new Set(rightTokens);
+  let overlap = 0;
+  for (const token of leftTokens) {
+    if (rightSet.has(token)) overlap += 1;
+  }
+
+  return overlap / Math.max(leftTokens.length, rightTokens.length);
+}
+
+/**
+ * Merge Google Places extras into a local restaurant record without
+ * overwriting canonical FEHD fields like address or coordinates.
+ *
+ * @param {import('./types.js').Restaurant} local
+ * @param {import('./types.js').Restaurant} place
+ */
+function mergeGooglePlaceIntoLocal(local, place) {
+  if (!local || !place) return;
+
+  local.place_id = local.place_id || place.place_id || '';
+  local.rating = place.rating || local.rating || 0;
+  local.user_ratings_total = place.user_ratings_total || local.user_ratings_total || 0;
+  local.price_level = place.price_level || local.price_level || 0;
+  local.types = Array.isArray(place.types) && place.types.length > 0 ? place.types.slice() : (local.types || []);
+  local.cuisine = local.cuisine || place.cuisine || (
+    local.types
+      .filter((t) => String(t || '').trim())
+      .join(', ')
+  );
+  local.photos = Array.isArray(place.photos) ? place.photos.slice(0, 5) : (local.photos || []);
+  local.photo_refs = Array.isArray(place.photo_refs) ? place.photo_refs.slice(0, 5) : (local.photo_refs || []);
+  local.phone = place.phone || local.phone || '';
+  local.website = place.website || local.website || '';
+  local.opening_hours = place.opening_hours || local.opening_hours || null;
+  local.enrichment_status = local.enrichment_status || 'pending';
+}
+
 // ---------------------------------------------------------------------------
 // District index loading
 // ---------------------------------------------------------------------------
@@ -275,51 +346,104 @@ export function mergeRestaurants(localData, placesData) {
   if (!placesData || placesData.length === 0) return localData;
   if (!localData || localData.length === 0) return placesData;
 
-  // Build a set of Places place_ids for quick lookup
-  const placesById = new Map();
-  for (const p of placesData) {
-    if (p.place_id) {
-      placesById.set(p.place_id, p);
+  const mergedLocal = localData.map((restaurant) => ({ ...restaurant }));
+
+  /** @type {Map<string, import('./types.js').Restaurant[]>} */
+  const localByName = new Map();
+  for (const local of mergedLocal) {
+    for (const rawName of [local.name, local.name_en]) {
+      const key = normalizeRestaurantName(rawName);
+      if (!key) continue;
+      if (!localByName.has(key)) {
+        localByName.set(key, []);
+      }
+      localByName.get(key).push(local);
     }
   }
 
-  // Dedup local data against Places: remove local records that match
-  // a Places result by place_id or name+proximity
-  const dedupedLocal = [];
-  for (const local of localData) {
-    // Check place_id match
-    if (local.place_id && placesById.has(local.place_id)) {
-      continue; // Places version wins
-    }
+  const matchedLocalIds = new Set();
+  const matchedPlaceIds = new Set();
 
-    // Check name + proximity match
-    let isDuplicate = false;
-    const localLat = parseFloat(String(local.lat));
-    const localLng = parseFloat(String(local.lng));
-    const localName = (local.name || '').trim().toLowerCase();
+  for (const place of placesData) {
+    const placeId = String(place.place_id || '').trim();
+    const exactKeys = [
+      normalizeRestaurantName(place.name),
+      normalizeRestaurantName(place.name_en),
+    ].filter(Boolean);
 
-    if (localName && isFinite(localLat) && isFinite(localLng)) {
-      for (const p of placesData) {
-        const pName = (p.name || '').trim().toLowerCase();
-        if (pName !== localName) continue;
+    let bestLocal = null;
+    let bestScore = 0;
 
-        const pLat = parseFloat(String(p.lat));
-        const pLng = parseFloat(String(p.lng));
-        if (!isFinite(pLat) || !isFinite(pLng)) continue;
+    /**
+     * Evaluate a local record as a potential match.
+     *
+     * @param {import('./types.js').Restaurant} local
+     */
+    const consider = (local) => {
+      if (!local || matchedLocalIds.has(local.id)) return;
 
-        const dist = haversine(localLat, localLng, pLat, pLng);
-        if (dist <= DEDUP_RADIUS_M) {
-          isDuplicate = true;
-          break;
-        }
+      if (placeId && local.place_id && String(local.place_id).trim() === placeId) {
+        bestLocal = local;
+        bestScore = 1;
+        return;
+      }
+
+      const nameScore = Math.max(
+        nameSimilarityScore(local.name, place.name),
+        nameSimilarityScore(local.name, place.name_en),
+        nameSimilarityScore(local.name_en, place.name),
+        nameSimilarityScore(local.name_en, place.name_en),
+      );
+      if (nameScore < 0.75) return;
+
+      let score = nameScore;
+      const localHasCoords = hasValidCoordinates(local);
+      const placeHasCoords = hasValidCoordinates(place);
+      if (localHasCoords && placeHasCoords) {
+        const localLat = parseFloat(String(local.lat));
+        const localLng = parseFloat(String(local.lng));
+        const placeLat = parseFloat(String(place.lat));
+        const placeLng = parseFloat(String(place.lng));
+        const dist = haversine(localLat, localLng, placeLat, placeLng);
+        if (dist > DEDUP_RADIUS_M) return;
+        score += Math.max(0, (DEDUP_RADIUS_M - dist) / DEDUP_RADIUS_M) * 0.2;
+      } else if (nameScore < 0.9) {
+        return;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestLocal = local;
+      }
+    };
+
+    for (const key of exactKeys) {
+      const candidates = localByName.get(key) || [];
+      for (const local of candidates) {
+        consider(local);
       }
     }
 
-    if (!isDuplicate) {
-      dedupedLocal.push(local);
+    if (!bestLocal) {
+      for (const local of mergedLocal) {
+        consider(local);
+      }
+    }
+
+    if (bestLocal) {
+      matchedLocalIds.add(bestLocal.id);
+      if (placeId) {
+        matchedPlaceIds.add(placeId);
+      }
+      mergeGooglePlaceIntoLocal(bestLocal, place);
     }
   }
 
-  // Combine: local first (comprehensive), then Places (enriched)
-  return [...dedupedLocal, ...placesData];
+  const unmatchedPlaces = placesData.filter((place) => {
+    const placeId = String(place.place_id || '').trim();
+    return !placeId || !matchedPlaceIds.has(placeId);
+  });
+
+  // Keep local records as the canonical base; append only Google-only places.
+  return [...mergedLocal, ...unmatchedPlaces];
 }

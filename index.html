@@ -25,8 +25,8 @@
   <div class="toolbar" id="toolbar">
     <button class="toolbar-btn active" data-sort="distance">距離最近</button>
     <button class="toolbar-btn" data-sort="rating">評分最高</button>
-    <button class="toolbar-btn" data-sort="name">名稱排序</button>
-    <button class="toolbar-btn" data-sort="district">地區排序</button>
+    <button class="toolbar-btn toolbar-btn-hidden" data-sort="name" aria-hidden="true" tabindex="-1">名稱排序</button>
+    <button class="toolbar-btn toolbar-btn-hidden" data-sort="district" aria-hidden="true" tabindex="-1">地區排序</button>
   </div>
 
   <!-- Cuisine Filter -->
@@ -117,6 +117,7 @@
         <div id="loc-search-results" class="loc-search-results"></div>
       </div>
       <div id="loc-list" style="margin-bottom:12px;"></div>
+      <div class="loc-section-sep"></div>
       <div style="display:flex;gap:8px;">
         <button class="gps-btn" id="gps-btn" style="flex:1;">使用目前位置 (GPS)</button>
         <button class="gps-btn" id="map-pick-loc-btn" style="flex:1;">在地圖上選點</button>
@@ -137,10 +138,21 @@
         <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px;">地點名稱</label>
         <input type="text" id="custom-loc-name" placeholder="例如：公司、家、運動場..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;" />
       </div>
-      <div style="display:flex;gap:8px;">
-        <button class="gps-btn" id="custom-loc-gps" style="flex:1;margin-top:0;">使用 GPS</button>
-        <button class="gps-btn" id="custom-loc-map" style="flex:1;margin-top:0;">在地圖上選點</button>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:13px;font-weight:500;display:block;margin-bottom:4px;">搜尋地址 / 地標</label>
+        <input type="text" id="custom-loc-search" placeholder="輸入永安中心、太古城中心..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;" autocomplete="off" />
+        <div id="custom-loc-suggestions" class="loc-search-results"></div>
       </div>
+      <div class="loc-confirm-card" id="custom-loc-preview">
+        <div class="loc-confirm-title" id="custom-loc-preview-title">等待解析地址</div>
+        <div class="loc-confirm-sub" id="custom-loc-preview-address">輸入名稱和地址後，我們會幫你補全座標並確認位置。</div>
+        <div class="loc-confirm-map" id="custom-loc-map-preview"></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="gps-btn" id="custom-loc-save" style="flex:1;margin-top:0;">儲存地點</button>
+        <button class="gps-btn" id="custom-loc-map" style="flex:1;margin-top:0;">地圖微調</button>
+      </div>
+      <button class="gps-btn" id="custom-loc-gps" style="margin-top:8px;">使用 GPS 填入目前位置</button>
       <button class="gps-btn" id="cancel-custom-loc" style="margin-top:8px;border-style:solid;color:var(--text-secondary);border-color:var(--border);">取消</button>
     </div>
   </div>
@@ -151,7 +163,29 @@
       <div class="random-header" style="position:relative;">
         <button class="random-close" id="random-close">×</button>
         <h2>今天吃什麼？</h2>
-        <p id="random-subtitle">讓我幫你決定！</p>
+        <p id="random-subtitle">先揀模式，再開始抽</p>
+      </div>
+      <div id="random-setup" class="random-setup">
+        <div class="random-section-title">抽選模式</div>
+        <div class="random-mode-bar" id="random-mode-bar">
+          <button class="random-mode-btn active" data-random-mode="walkable">附近步行</button>
+          <button class="random-mode-btn" data-random-mode="keyword">按需求</button>
+          <button class="random-mode-btn" data-random-mode="favorites">收藏盲選</button>
+        </div>
+        <div class="random-section-title">範圍</div>
+        <div class="random-scope-bar" id="random-scope-bar">
+          <button class="random-scope-btn active" data-random-scope="walkable">步行優先</button>
+          <button class="random-scope-btn" data-random-scope="all">全部候選</button>
+        </div>
+        <div class="random-keyword-block" id="random-keyword-block">
+          <label for="random-query-input">需求關鍵字</label>
+          <input type="text" id="random-query-input" placeholder="例如：米線、燒肉、咖啡" />
+        </div>
+        <div class="random-setup-hint">預設會優先抽取可步行到達的餐廳；可先輸入需求再開始抽。</div>
+        <div class="random-actions random-setup-actions">
+          <button class="action-btn action-btn-secondary" id="random-close-setup">取消</button>
+          <button class="action-btn action-btn-primary" id="random-start">開始抽</button>
+        </div>
       </div>
       <div id="random-body">
         <div class="random-rolling">

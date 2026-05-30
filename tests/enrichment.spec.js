@@ -5,7 +5,7 @@ test.describe('Restaurant enrichment', () => {
     await page.addInitScript(() => {
       window.__lunchgoGoogleStub = {
         nearbySearch: () => ({ status: 'ZERO_RESULTS', results: [] }),
-        textSearch: (request) => ({
+        search: (request) => ({
           status: 'OK',
           delayMs: 150,
           results: [{
@@ -77,5 +77,53 @@ test.describe('Restaurant enrichment', () => {
     await expect(page.locator('#detail-content')).toContainText('前往網站');
     await expect(page.locator('#detail-content img.detail-photo')).toHaveCount(1);
     await expect(card).toContainText('4.2');
+  });
+
+  test('should keep FEHD address canonical while enriching visible cards', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__lunchgoGoogleStub = {
+        nearbySearch: () => ({ status: 'ZERO_RESULTS', results: [] }),
+        search: (request) => ({
+          status: 'OK',
+          results: [{
+            place_id: 'wan_chai_stub',
+            name: '花斑茶社（灣仔店）',
+            vicinity: 'Fo Tan, Sha Tin',
+          }],
+        }),
+        getDetails: (request) => {
+          if (!request || request.placeId !== 'wan_chai_stub') {
+            return { status: 'ZERO_RESULTS', details: null };
+          }
+          return {
+            status: 'OK',
+            details: {
+              place_id: 'wan_chai_stub',
+              name: '花斑茶社（灣仔店）',
+              formatted_address: 'Fo Tan, Sha Tin',
+              formatted_phone_number: '+852 2333 1122',
+              website: 'https://example.com/wanchai',
+              rating: 4.0,
+              user_ratings_total: 88,
+              photos: [],
+            },
+          };
+        },
+      };
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('load');
+
+    await expect(page.locator('#rest-list .rest-card').first()).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('#loading-state')).toBeHidden({ timeout: 15000 });
+
+    const firstCard = page.locator('#rest-list .rest-card').first();
+    await firstCard.click();
+    await page.waitForTimeout(750);
+
+    const detailText = await page.locator('#detail-content').textContent();
+    expect(detailText).toContain('地址');
+    expect(detailText).not.toContain('Fo Tan');
   });
 });

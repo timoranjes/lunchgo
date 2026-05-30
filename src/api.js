@@ -467,7 +467,6 @@ function buildEnrichmentPayload(place) {
     place_id: place.place_id || '',
     name: place.name || '',
     name_en: place.name || '',
-    address: place.formatted_address || '',
     rating: place.rating || 0,
     user_ratings_total: place.user_ratings_total || 0,
     price_level: place.price_level || 0,
@@ -690,10 +689,13 @@ async function fetchRestaurantEnrichment(placesService, restaurant, options = {}
  */
 function applyEnrichmentPayload(restaurant, payload, options = {}) {
   const keepExistingCoordinates = options.keepExistingCoordinates || false;
+  const preserveAddress = options.preserveAddress !== false;
 
   restaurant.name = payload.name || restaurant.name || '';
   restaurant.name_en = payload.name_en || restaurant.name_en || restaurant.name || '';
-  restaurant.address = payload.address || restaurant.address || '';
+  if (!preserveAddress && payload.address) {
+    restaurant.address = payload.address;
+  }
   restaurant.rating = payload.rating || restaurant.rating || 0;
   restaurant.user_ratings_total = payload.user_ratings_total || restaurant.user_ratings_total || 0;
   restaurant.price_level = payload.price_level || restaurant.price_level || 0;
@@ -881,11 +883,6 @@ async function fetchPhotosForTopRestaurants(places, placesService, options = {})
           ph.getUrl({ maxWidth: 400, maxHeight: 300 })
         );
         place.photo_refs = details.photos.slice(0, 5).map((/** @type {*} */ ph) => ph.photo_reference);
-      }
-
-      // Update address if better
-      if (details.formatted_address) {
-        place.address = details.formatted_address;
       }
 
       // Update price level

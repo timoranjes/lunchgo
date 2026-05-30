@@ -14,6 +14,7 @@ import time
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from difflib import SequenceMatcher
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -36,6 +37,9 @@ OVERPASS_ENDPOINTS: List[str] = [
     'https://z.overpass-api.de/api/interpreter',
     'https://lz4.overpass-api.de/api/interpreter',
 ]
+
+ALS_LOCATION_SEARCH_URL: str = 'https://www.map.gov.hk/gs/api/v1.0.0/locationSearch'
+GEODETIC_TRANSFORM_URL: str = 'https://www.geodetic.gov.hk/transform/v2/'
 
 HK_BOUNDS: Tuple[float, float, float, float] = (22.11, 113.83, 22.57, 114.43)
 
@@ -134,6 +138,24 @@ def _http_get(url: str, timeout: int = 60) -> requests.Response:
         headers={
             'User-Agent': 'LunchGo-Bot/2.0',
             'Accept': 'application/xml',
+        },
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    return resp
+
+
+def _http_get_json(
+    url: str,
+    timeout: int = 30,
+    **params: Any,
+) -> requests.Response:
+    resp = requests.get(
+        url,
+        params=params,
+        headers={
+            'User-Agent': 'LunchGo-Bot/2.0',
+            'Accept': 'application/json',
         },
         timeout=timeout,
     )
@@ -371,43 +393,212 @@ def address_conflicts(fehd_address: str, candidate_address: str) -> bool:
     return score < 0.25 and bool(tokenize_address(fehd_address)) and bool(tokenize_address(candidate_address))
 
 
-def geocode_fehd_address(address: str) -> Optional[Tuple[float, float]]:
+def _candidate_address_blob(candidate: Dict[str, Any]) -> str:
+    parts = [
+        candidate.get('nameZH', ''),
+        candidate.get('nameEN', ''),
+        candidate.get('addressZH', ''),
+        candidate.get('addressEN', ''),
+        candidate.get('districtZH', ''),
+        candidate.get('districtEN', ''),
+    ]
+    return ' '.join(str(part).strip() for part in parts if str(part).strip())
+
+
+def _district_matches_lookup(dist_code: str, candidate: Dict[str, Any]) -> bool:
+    if not dist_code:
+        return True
+
+    info = DISTRICT_MAP.get(dist_code)
+    if not info:
+        return True
+
+    candidate_district = ' '.join([
+        str(candidate.get('districtZH', '') or ''),
+        str(candidate.get('districtEN', '') or ''),
+    ]).lower()
+    district_tokens = {
+        info['en'].lower(),
+        info['tc'].lower(),
+        info['en'].replace('/', ' ').lower(),
+        info['en'].replace('/', '').lower(),
+    }
+    return any(token and token in candidate_district for token in district_tokens)
+
+
+def _candidate_lookup_score(
+    fehd_address: str,
+    fehd_name: str,
+    fehd_name_en: str,
+    dist_code: str,
+    candidate: Dict[str, Any],
+) -> float:
+    candidate_blob = _candidate_address_blob(candidate)
+    if not candidate_blob:
+        return 0.0
+
+    address_score = address_agreement_score(fehd_address, candidate_blob)
+    if address_score <= 0:
+        return 0.0
+
+    candidate_name = candidate.get('nameZH', '') or candidate.get('nameEN', '') or ''
+    name_score = max(
+        name_similarity(fehd_name, candidate_name),
+        name_similarity(fehd_name_en, candidate_name),
+        name_similarity(fehd_name, candidate.get('nameEN', '') or ''),
+        name_similarity(fehd_name_en, candidate.get('nameEN', '') or ''),
+    )
+
+    district_bonus = 0.15 if _district_matches_lookup(dist_code, candidate) else 0.0
+    return (address_score * 0.7) + (name_score * 0.2) + district_bonus
+
+
+def _search_location_lookup(query: str) -> List[Dict[str, Any]]:
+    if not query:
+        return []
+
+    resp = _retry_with_backoff(
+        _http_get_json,
+        ALS_LOCATION_SEARCH_URL,
+        timeout=30,
+        q=query,
+    )
+    payload = resp.json()
+    return payload if isinstance(payload, list) else []
+
+
+@lru_cache(maxsize=2048)
+def _transform_hkgrid_to_wgs(easting: float, northing: float) -> Optional[Tuple[float, float]]:
+    resp = _retry_with_backoff(
+        _http_get_json,
+        GEODETIC_TRANSFORM_URL,
+        timeout=30,
+        inSys='hkgrid',
+        outSys='wgsgeog',
+        e=easting,
+        n=northing,
+    )
+    payload = resp.json()
+    lat = payload.get('wgsLat')
+    lng = payload.get('wgsLong')
+    if lat is None or lng is None:
+        return None
+    try:
+        return float(lat), float(lng)
+    except (TypeError, ValueError):
+        return None
+
+
+def geocode_fehd_address(
+    address: str,
+    dist_code: str = '',
+    district_name: str = '',
+    fehd_name: str = '',
+    fehd_name_en: str = '',
+) -> Optional[Tuple[float, float]]:
     """Approximate FEHD address geocoding fallback.
 
-    The production pipeline can optionally call a geocoder here. In tests this
-    is patched to return deterministic coordinates; in production a missing
-    implementation should simply return None.
+    Uses the government Address Lookup Service to find a likely street/building
+    match, then converts the HK grid coordinates to WGS84. The result is only an
+    approximation used when an exact FEHD -> OSM merge is not safe.
     """
     if not address:
         return None
 
-    query = f'{address} Hong Kong'
+    queries = [address.strip()]
+    if district_name:
+        queries.insert(0, f'{district_name} {address}'.strip())
+    stripped = re.sub(r'^(香港|新界|九龍|港島)\s*', '', address).strip()
+    if stripped and stripped not in queries:
+        queries.append(stripped)
+
+    best_coords: Optional[Tuple[float, float]] = None
+    best_score = 0.0
+
     try:
-        resp = requests.get(
-            'https://nominatim.openstreetmap.org/search',
-            params={
-                'q': query,
-                'format': 'jsonv2',
-                'limit': 1,
-            },
-            headers={
-                'User-Agent': 'LunchGo-Bot/2.0',
-                'Accept': 'application/json',
-            },
-            timeout=20,
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-        if not payload:
-            return None
-        first = payload[0]
-        lat = first.get('lat')
-        lon = first.get('lon')
-        if lat is None or lon is None:
-            return None
-        return float(lat), float(lon)
+        for query in queries:
+            for candidate in _search_location_lookup(query):
+                x_raw = candidate.get('x')
+                y_raw = candidate.get('y')
+                if x_raw is None or y_raw is None:
+                    continue
+
+                candidate_score = _candidate_lookup_score(
+                    address,
+                    fehd_name,
+                    fehd_name_en,
+                    district_name,
+                    dist_code,
+                    candidate,
+                )
+                if candidate_score <= best_score:
+                    continue
+
+                try:
+                    x = float(x_raw)
+                    y = float(y_raw)
+                except (TypeError, ValueError):
+                    continue
+
+                coords = _transform_hkgrid_to_wgs(x, y)
+                if coords is None:
+                    continue
+
+                best_coords = coords
+                best_score = candidate_score
+
+        return best_coords
     except Exception:
         return None
+
+
+def fetch_fehd_approximate_coords(
+    fehd_address: str,
+    dist_code: str,
+    district_name: str = '',
+    fehd_name: str = '',
+    fehd_name_en: str = '',
+) -> Optional[Tuple[float, float]]:
+    """Compatibility wrapper for tests and merge logic."""
+    return geocode_fehd_address(fehd_address, dist_code, district_name, fehd_name, fehd_name_en)
+
+
+def has_suspicious_osm_candidate(
+    fehd_address: str,
+    dist_code: str,
+    name_tc: str,
+    name_en: str,
+    candidates: List[ParsedOsmPlace],
+) -> bool:
+    """Return True when a same-district OSM candidate looks plausible but unsafe.
+
+    We only trigger the ALS fallback when the district has at least one OSM
+    restaurant that resembles the FEHD row enough to deserve a look, but the
+    address tokens or district context make an exact merge unsafe.
+    """
+    if not dist_code or not candidates:
+        return False
+
+    for candidate in candidates:
+      candidate_name = candidate.get('name', '')
+      candidate_name_en = candidate.get('name_en', '')
+      name_score = max(
+          name_similarity(name_tc, candidate_name),
+          name_similarity(name_en, candidate_name),
+          name_similarity(name_tc, candidate_name_en),
+          name_similarity(name_en, candidate_name_en),
+      )
+      if name_score < 0.2:
+          continue
+
+      candidate_address = candidate.get('address', '') or ''
+      if address_conflicts(fehd_address, candidate_address):
+          return True
+
+      if candidate.get('_district') and candidate['_district'] != dist_code:
+          return True
+
+    return False
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -479,14 +670,16 @@ def merge(
         best_score = 0.0
         fehd_address = fehd.get('address_tc', '') or fehd.get('address', '')
         fehd_tokens = tokenize_address(fehd_address)
+        fehd_name_norms = {normalize_name(name_tc), normalize_name(name_en)}
 
-        for norm_name in [normalize_name(name_tc), normalize_name(name_en)]:
+        for norm_name in fehd_name_norms:
             if norm_name and norm_name in osm_name_index:
                 for candidate in osm_name_index[norm_name]:
                     score = name_similarity(name_tc, candidate['name'])
                     if score > best_score and candidate['osm_id'] not in matched_osm_ids:
                         candidate_address = candidate.get('address', '') or ''
                         address_score = address_agreement_score(fehd_address, candidate_address)
+                        candidate_tokens = tokenize_address(candidate_address)
                         district_ok = (
                             candidate['_district'] == dist_code
                             or haversine_km(
@@ -494,7 +687,13 @@ def merge(
                                 candidate['lat'], candidate['lng'],
                             ) < 5
                         )
-                        if district_ok and score >= 0.72 and (address_score >= 0.25 or not fehd_tokens or not tokenize_address(candidate_address)):
+                        same_name = score >= 0.84
+                        address_ok = (
+                            address_score >= 0.32
+                            or not fehd_tokens
+                            or not candidate_tokens
+                        )
+                        if district_ok and same_name and address_ok:
                             best_score = score + address_score * 0.2
                             best_match = candidate
 
@@ -506,11 +705,14 @@ def merge(
                 candidate_address = candidate.get('address', '') or ''
                 address_score = address_agreement_score(fehd_address, candidate_address)
                 candidate_tokens = tokenize_address(candidate_address)
-                if score > best_score and score >= 0.75 and (
+                district_mismatch = bool(candidate.get('_district')) and candidate['_district'] != dist_code
+                same_name = score >= 0.84
+                address_ok = (
                     address_score >= 0.3
                     or not fehd_tokens
                     or not candidate_tokens
-                ):
+                )
+                if score > best_score and same_name and address_ok and not district_mismatch:
                     best_score = score + address_score * 0.2
                     best_match = candidate
 
@@ -549,7 +751,23 @@ def merge(
                 fehd_empty_name += 1
                 continue
 
-            approx_coords: Optional[Tuple[float, float]] = geocode_fehd_address(fehd_address)
+            suspicious_candidates = osm_by_district.get(dist_code, [])
+            approx_coords: Optional[Tuple[float, float]] = None
+            if has_suspicious_osm_candidate(
+                fehd_address,
+                dist_code,
+                name_tc,
+                name_en,
+                suspicious_candidates,
+            ):
+                approx_coords = fetch_fehd_approximate_coords(
+                    fehd_address,
+                    dist_code,
+                    DISTRICT_MAP.get(dist_code, {}).get('en', ''),
+                    name_tc,
+                    name_en,
+                )
+
             if approx_coords is not None:
                 fehd_approximate += 1
             else:

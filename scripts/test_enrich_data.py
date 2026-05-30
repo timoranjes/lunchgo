@@ -522,7 +522,7 @@ class TestMergeLogic:
             }
         ]
 
-        with patch('enrich_data.geocode_fehd_address', return_value=(22.4167715, 114.2277168)):
+        with patch('enrich_data.fetch_fehd_approximate_coords', return_value=(22.4167715, 114.2277168)):
             result = merge(fehd_data, osm_elements)
 
         assert len(result) == 2
@@ -534,6 +534,46 @@ class TestMergeLogic:
         assert '恒安邨' in fehd_record['address']
         osm_record = next(r for r in result if r['id'] == 'osm_4796652881')
         assert osm_record['name'] == "鍾菜館 Chung's House"
+
+    def test_merge_rejects_address_conflicting_exact_match(self):
+        fehd_data = {
+            '8888888888': {
+                'name': '花斑茶社（灣仔店）',
+                'name_tc': '花斑茶社（灣仔店）',
+                'address': '香港灣仔軒尼詩道123號地下',
+                'address_tc': '香港灣仔軒尼詩道123號地下',
+                'district': '12',
+                'type': 'RL',
+                'expdate': '2027-06-30'
+            }
+        }
+
+        osm_elements = [
+            {
+                'id': 10115247867,
+                'type': 'node',
+                'lat': 22.3970213,
+                'lon': 114.1957234,
+                'tags': {
+                    'name': '花斑茶社',
+                    'addr:full': '新界沙田㘭背灣街13號',
+                    'amenity': 'restaurant'
+                }
+            }
+        ]
+
+        with patch('enrich_data.fetch_fehd_approximate_coords', return_value=(22.2788, 114.1740)):
+            result = merge(fehd_data, osm_elements)
+
+        assert len(result) == 2
+        fehd_record = next(r for r in result if r['id'] == 'fehd_8888888888')
+        assert fehd_record['source'] == 'fehd'
+        assert fehd_record['location_status'] == 'approximate'
+        assert fehd_record['lat'] == 22.2788
+        assert fehd_record['lng'] == 114.1740
+        assert '灣仔' in fehd_record['address']
+        osm_record = next(r for r in result if r['id'] == 'osm_10115247867')
+        assert osm_record['district'] == 'Sha Tin'
 
 
 class TestOutputFormat:
