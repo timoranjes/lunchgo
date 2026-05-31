@@ -102,6 +102,11 @@ ADDRESS_STOP_WORDS = {
     '街市', '屋苑', '屋邨', '屋村', '村', '邨', '苑', '場', '區', '大樓', '酒店', '飯店',
 }
 
+# Known bad OSM records that should never be published.
+QUARANTINED_OSM_IDS = {
+    '10115247867',
+}
+
 
 def _retry_with_backoff(
     func: callable,
@@ -357,6 +362,13 @@ def normalize_name(name: Optional[str]) -> str:
 
 def normalize_business_status(value: Any) -> str:
     return str(value or '').strip().upper().replace('-', '_').replace(' ', '_')
+
+
+def is_closed_business_status(value: Any) -> bool:
+    return normalize_business_status(value) in {
+        'CLOSED',
+        'CLOSED_PERMANENTLY',
+    }
 
 
 def name_similarity(a: str, b: str) -> float:
@@ -653,11 +665,17 @@ def merge(
 ) -> List[MergedRestaurant]:
     logger.info('Merging data...')
 
+    all_osm_places: List[ParsedOsmPlace] = []
     osm_places: List[ParsedOsmPlace] = []
+    osm_quarantined = 0
     for elem in osm_elements:
         p = parse_osm_element(elem)
         if p:
             p['_district'] = assign_district(p['lat'], p['lng'])
+            all_osm_places.append(p)
+            if str(p.get('osm_id', '')) in QUARANTINED_OSM_IDS:
+                osm_quarantined += 1
+                continue
             osm_places.append(p)
     logger.info('  Parsed OSM places: %d', len(osm_places))
 
@@ -775,7 +793,7 @@ def merge(
                 fehd_empty_name += 1
                 continue
 
-            suspicious_candidates = osm_places
+            suspicious_candidates = all_osm_places
             approx_coords: Optional[Tuple[float, float]] = None
             if allow_approximate and has_suspicious_osm_candidate(
                 fehd_address,
@@ -856,13 +874,13 @@ def merge(
     logger.info('  FEHD approximate (geocoded): %d', fehd_approximate)
     logger.info('  FEHD empty-name (excluded): %d', fehd_empty_name)
     logger.info('  OSM-only (new places): %d', osm_only)
+    logger.info('  OSM quarantined: %d', osm_quarantined)
     logger.info('  Total: %d', len(results))
     return [
         r for r in results
         if not (
             r.get('permanently_closed') is True
-            or normalize_business_status(r.get('business_status', '')) == 'CLOSED_PERMANENTLY'
-            or normalize_business_status(r.get('business_status', '')) == 'CLOSED'
+            or is_closed_business_status(r.get('business_status', ''))
         )
     ]
 

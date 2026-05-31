@@ -1,6 +1,6 @@
 {
   "v": 4,
-  "total": 22153,
+  "total": 22155,
   "districts": {
     "Southern": {
       "file": "data/district_southern.json",
@@ -9,7 +9,7 @@
     },
     "Eastern": {
       "file": "data/district_eastern.json",
-      "count": 1140,
+      "count": 1141,
       "url": "data/district_eastern.json"
     },
     "Central/Western": {
@@ -49,7 +49,7 @@
     },
     "Sha Tin": {
       "file": "data/district_sha_tin.json",
-      "count": 1049,
+      "count": 1048,
       "url": "data/district_sha_tin.json"
     },
     "Yau Tsim": {
@@ -89,7 +89,7 @@
     },
     "Islands": {
       "file": "data/district_islands.json",
-      "count": 695,
+      "count": 697,
       "url": "data/district_islands.json"
     },
     "Wong Tai Sin": {
@@ -99,12 +99,12 @@
     }
   },
   "stats": {
-    "with_cuisine": 3788,
-    "with_phone": 991,
-    "with_hours": 1084,
+    "with_cuisine": 3790,
+    "with_phone": 990,
+    "with_hours": 1083,
     "location_status": {
       "missing": 16022,
-      "exact": 6131
+      "exact": 6133
     }
   }
 }

@@ -437,6 +437,8 @@ function buildRestaurantFromPlace(p) {
   const placeId = p.place_id || Math.random().toString(36).slice(2);
   const types = p.types || [];
   const businessStatus = String(p.business_status || '').trim();
+  const normalizedStatus = businessStatus.toUpperCase().replace(/[\s-]+/g, '_');
+  const isClosedStatus = normalizedStatus === 'CLOSED' || normalizedStatus === 'CLOSED_PERMANENTLY';
 
   return {
     id: 'place_' + placeId,
@@ -459,7 +461,7 @@ function buildRestaurantFromPlace(p) {
     amenity: 'restaurant',
     enrichment_status: 'pending',
     business_status: businessStatus,
-    permanently_closed: p.permanently_closed === true || businessStatus === 'CLOSED_PERMANENTLY',
+    permanently_closed: p.permanently_closed === true || isClosedStatus,
   };
 }
 
@@ -470,6 +472,9 @@ function buildRestaurantFromPlace(p) {
  * @returns {Record<string, any>}
  */
 function buildEnrichmentPayload(place) {
+  const businessStatus = String(place.business_status || '').trim();
+  const normalizedStatus = businessStatus.toUpperCase().replace(/[\s-]+/g, '_');
+  const isClosedStatus = normalizedStatus === 'CLOSED' || normalizedStatus === 'CLOSED_PERMANENTLY';
   const payload = {
     place_id: place.place_id || '',
     name: place.name || '',
@@ -485,10 +490,10 @@ function buildEnrichmentPayload(place) {
     types: place.types || [],
     source: 'places',
     enrichment_status: 'ready',
-    business_status: String(place.business_status || '').trim(),
+    business_status: businessStatus,
     permanently_closed:
       place.permanently_closed === true ||
-      String(place.business_status || '').trim() === 'CLOSED_PERMANENTLY',
+      isClosedStatus,
   };
 
   if (place.photos && place.photos.length > 0) {

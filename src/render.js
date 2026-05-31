@@ -783,6 +783,50 @@ function getClosedStatusText(restaurant) {
   return '';
 }
 
+function patchDetailHeroRating(restaurant) {
+  const hero = document.querySelector('#detail-view .detail-hero');
+  if (!hero) return;
+
+  const rating = Number(restaurant?.rating || 0);
+  const ratingRow = hero.querySelector('.detail-rating-row');
+
+  if (!rating) {
+    if (ratingRow) ratingRow.remove();
+    return;
+  }
+
+  const ratingCount = Number(restaurant?.user_ratings_total || 0);
+  const ratingHtml =
+    '<div class="detail-rating-row">' +
+    '<span class="detail-stars">' +
+    renderStars(rating) +
+    '</span>' +
+    '<span class="detail-rating-score">' +
+    rating +
+    '</span>' +
+    (ratingCount
+      ? '<span class="detail-rating-count">(' + ratingCount + ' 則評價)</span>'
+      : '') +
+    '</div>';
+
+  if (ratingRow) {
+    ratingRow.outerHTML = ratingHtml;
+    return;
+  }
+
+  const nameEnNode = hero.querySelector('.detail-name-en');
+  if (nameEnNode) {
+    nameEnNode.insertAdjacentHTML('afterend', ratingHtml);
+  } else {
+    const nameNode = hero.querySelector('.detail-name');
+    if (nameNode) {
+      nameNode.insertAdjacentHTML('afterend', ratingHtml);
+    } else {
+      hero.insertAdjacentHTML('afterbegin', ratingHtml);
+    }
+  }
+}
+
 /**
  * Render the restaurant list with lazy loading / pagination.
  *
@@ -1092,6 +1136,8 @@ export function showDetail(id) {
             .join('') +
           '</div>';
       }
+
+      patchDetailHeroRating(updated);
 
       const section = document.getElementById('detail-hours-section');
       if (!section) return;

@@ -36,6 +36,7 @@ import {
   teardownLazyLoading,
 } from './render.js';
 import { loadNearbyDistricts, mergeRestaurants } from './local-data.js';
+import { isClosedRestaurant } from './utils.js';
 
 const GOOGLE_MAPS_API_KEY = 'AIzaSyBN_pMA5dYGC70sS4OnoYALDszrTUUpjkM';
 
@@ -471,6 +472,7 @@ function markRestaurantEnrichment(restaurant, status, extra = {}) {
 
 function applyRestaurantEnrichmentUpdate(restaurant, payload) {
   if (!restaurant) return;
+  const wasClosed = isClosedRestaurant(restaurant);
   if (payload && payload.details) {
     restaurant.enrichment_status = 'ready';
     if (payload.details.business_status) {
@@ -481,6 +483,10 @@ function applyRestaurantEnrichmentUpdate(restaurant, payload) {
     }
   } else if (payload && payload.status === 'failed') {
     restaurant.enrichment_status = 'failed';
+  }
+
+  if (!wasClosed && isClosedRestaurant(restaurant)) {
+    updateDisplay(false);
   }
 }
 

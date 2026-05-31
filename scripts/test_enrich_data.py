@@ -600,15 +600,30 @@ class TestMergeLogic:
         with patch('enrich_data.fetch_fehd_approximate_coords', return_value=(22.2788, 114.1740)):
             result = merge(fehd_data, osm_elements)
 
-        assert len(result) == 2
+        assert len(result) == 1
         fehd_record = next(r for r in result if r['id'] == 'fehd_8888888888')
         assert fehd_record['source'] == 'fehd'
         assert fehd_record['location_status'] == 'approximate'
         assert fehd_record['lat'] == 22.2788
         assert fehd_record['lng'] == 114.1740
         assert '灣仔' in fehd_record['address']
-        osm_record = next(r for r in result if r['id'] == 'osm_10115247867')
-        assert osm_record['district'] == 'Sha Tin'
+        assert all(r['id'] != 'osm_10115247867' for r in result)
+
+    def test_merge_quarantines_known_bad_osm_record(self):
+        result = merge({}, [{
+            'id': 10115247867,
+            'type': 'node',
+            'lat': 22.3970213,
+            'lon': 114.1957234,
+            'tags': {
+                'name': '花斑茶社',
+                'name:en': 'Aboutea',
+                'addr:full': '㘭背灣街 Au Pui Wan Street',
+                'amenity': 'cafe',
+            }
+        }])
+
+        assert result == []
 
     def test_merge_skips_closed_google_place(self):
         fehd_data = {
