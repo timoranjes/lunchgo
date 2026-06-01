@@ -62,6 +62,10 @@
     return window.__lunchgoGoogleStub;
   }
 
+  // Expose the stub registry immediately so tests and app code can patch
+  // deterministic Google responses before the first Places call runs.
+  getStubRegistry();
+
   function deliverStubResponse(callback, response, kind) {
     const payload = kind === 'details'
       ? (response?.details ?? null)

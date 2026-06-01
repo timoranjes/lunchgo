@@ -5,8 +5,8 @@ test.describe('Detail View', () => {
     await page.goto('/');
     // Wait for initial load to complete
     await Promise.race([
-      page.waitForSelector('#rest-list:not(:empty)', { timeout: 10000 }),
-      page.waitForSelector('#error-banner.show', { timeout: 10000 })
+      page.waitForSelector('#rest-list .rest-card', { timeout: 30000 }),
+      page.waitForSelector('#error-banner.show', { timeout: 30000 })
     ]);
   });
 

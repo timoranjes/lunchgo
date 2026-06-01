@@ -86,7 +86,8 @@ FIELDS: List[str] = [
     'district', 'district_tc', 'licence_type', 'expiry',
     'cuisine', 'phone', 'website', 'opening_hours',
     'amenity', 'source', 'location_status', 'business_status',
-    'permanently_closed',
+    'permanently_closed', 'match_source', 'match_confidence',
+    'match_reason',
 ]
 
 FehdRecord = Dict[str, Any]
@@ -106,6 +107,16 @@ ADDRESS_STOP_WORDS = {
 QUARANTINED_OSM_IDS = {
     '10115247867',
 }
+
+MATCH_SOURCE_FEHD = 'fehd'
+MATCH_SOURCE_FEHD_OSM = 'fehd+osm'
+MATCH_SOURCE_FEHD_ALS = 'fehd+als'
+MATCH_SOURCE_OSM = 'osm'
+
+MATCH_REASON_EXACT = 'exact_match'
+MATCH_REASON_APPROXIMATE = 'approximate_lookup'
+MATCH_REASON_MISSING = 'no_safe_match'
+MATCH_REASON_OSM_ONLY = 'osm_only'
 
 
 def _retry_with_backoff(
@@ -414,6 +425,177 @@ def address_conflicts(fehd_address: str, candidate_address: str) -> bool:
     return score < 0.25 and bool(tokenize_address(fehd_address)) and bool(tokenize_address(candidate_address))
 
 
+def _candidate_district_matches_expected(dist_code: str, candidate: Dict[str, Any]) -> bool:
+    if not dist_code:
+        return True
+
+    candidate_district = str(candidate.get('_district') or '').strip()
+    if candidate_district == dist_code:
+        return True
+
+    info = DISTRICT_MAP.get(dist_code)
+    if not info:
+        return True
+
+    try:
+        return haversine_km(
+            info['center'][0],
+            info['center'][1],
+            float(candidate.get('lat', 0) or 0),
+            float(candidate.get('lng', 0) or 0),
+        ) < 5
+    except (TypeError, ValueError):
+        return False
+
+
+def _candidate_district_conflicts(dist_code: str, candidate: Dict[str, Any]) -> bool:
+    if not dist_code:
+        return False
+    candidate_district = str(candidate.get('_district') or '').strip()
+    return bool(candidate_district) and candidate_district != dist_code
+
+
+def _candidate_match_score(
+    fehd_address: str,
+    dist_code: str,
+    name_tc: str,
+    name_en: str,
+    candidate: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Score one OSM candidate against a FEHD row.
+
+    Returns a small decision payload with the safe-match decision, a reason,
+    and whether the candidate should be quarantined from the OSM-only output.
+    """
+    candidate_name = candidate.get('name', '')
+    candidate_name_en = candidate.get('name_en', '')
+    candidate_address = candidate.get('address', '') or ''
+    name_score = max(
+        name_similarity(name_tc, candidate_name),
+        name_similarity(name_en, candidate_name),
+        name_similarity(name_tc, candidate_name_en),
+        name_similarity(name_en, candidate_name_en),
+    )
+    address_score = address_agreement_score(fehd_address, candidate_address)
+    fehd_tokens = tokenize_address(fehd_address)
+    candidate_tokens = tokenize_address(candidate_address)
+    district_conflict = _candidate_district_conflicts(dist_code, candidate)
+    district_ok = _candidate_district_matches_expected(dist_code, candidate)
+    same_name = name_score >= 0.95
+    strong_name = name_score >= 0.85
+    exact_reason_parts = ['name']
+    if address_score >= 0.3 or not fehd_tokens or not candidate_tokens:
+        exact_reason_parts.append('address')
+    if dist_code:
+        exact_reason_parts.append('district')
+
+    result: Dict[str, Any] = {
+        'eligible': False,
+        'quarantine': False,
+        'score': name_score,
+        'confidence': max(0.0, min(1.0, (name_score * 0.75) + (address_score * 0.2) + (0.05 if district_ok else 0.0))),
+        'reason': 'name_mismatch',
+        'district_ok': district_ok,
+        'district_conflict': district_conflict,
+        'name_score': name_score,
+        'address_score': address_score,
+    }
+
+    if not strong_name:
+        result['reason'] = 'name_mismatch'
+        return result
+
+    if district_conflict:
+        result['reason'] = 'district_conflict'
+        result['quarantine'] = same_name or name_score >= 0.98
+        return result
+
+    if address_conflicts(fehd_address, candidate_address):
+        result['reason'] = 'address_conflict'
+        result['quarantine'] = same_name or name_score >= 0.98
+        return result
+
+    if fehd_tokens and candidate_tokens and address_score < 0.3:
+        result['reason'] = 'address_weak'
+        result['quarantine'] = same_name and name_score >= 0.98
+        return result
+
+    if dist_code and not district_ok:
+        result['reason'] = 'district_uncertain'
+        result['quarantine'] = False
+        return result
+
+    result['eligible'] = True
+    result['reason'] = 'exact_match:' + '+'.join(exact_reason_parts)
+    result['confidence'] = max(result['confidence'], 0.9 if same_name else 0.82)
+    return result
+
+
+def _match_metadata(match_source: str, confidence: float, reason: str) -> Dict[str, Any]:
+    return {
+        'match_source': match_source,
+        'match_confidence': round(float(confidence), 3),
+        'match_reason': reason,
+    }
+
+
+def _normalize_output_metadata(record: MergedRestaurant) -> MergedRestaurant:
+    normalized = dict(record)
+    source = str(normalized.get('source', '')).strip()
+    raw_status = str(normalized.get('location_status', '') or '').strip()
+    lat = normalized.get('lat')
+    lng = normalized.get('lng')
+    has_coords = lat is not None and lng is not None
+    status = raw_status or (
+        'missing' if not has_coords else (
+            'approximate' if source == MATCH_SOURCE_FEHD else 'exact'
+        )
+    )
+    normalized['location_status'] = status
+
+    default_match_source = str(normalized.get('match_source', '')).strip()
+    if not default_match_source:
+        if source in {'fehd+osm', 'fehd', 'osm', 'places'}:
+            default_match_source = source
+        elif source == 'fehd+als':
+            default_match_source = MATCH_SOURCE_FEHD_ALS
+        else:
+            default_match_source = MATCH_SOURCE_FEHD if source == 'fehd' else source
+    normalized['match_source'] = default_match_source
+
+    match_confidence = normalized.get('match_confidence')
+    if match_confidence is None or match_confidence == '':
+        if default_match_source == MATCH_SOURCE_FEHD_OSM:
+            match_confidence = 0.95
+        elif default_match_source == MATCH_SOURCE_OSM:
+            match_confidence = 0.9
+        elif default_match_source == 'places':
+            match_confidence = 1.0
+        elif status == 'approximate':
+            match_confidence = 0.55
+        elif status == 'exact':
+            match_confidence = 0.9
+        else:
+            match_confidence = 0.0
+    normalized['match_confidence'] = match_confidence
+
+    match_reason = str(normalized.get('match_reason', '')).strip()
+    if not match_reason:
+        if default_match_source in {MATCH_SOURCE_FEHD_OSM, MATCH_SOURCE_FEHD} and status == 'exact':
+            match_reason = 'legacy_exact_match'
+        elif default_match_source == MATCH_SOURCE_FEHD_ALS or status == 'approximate':
+            match_reason = 'legacy_approximate_lookup'
+        elif default_match_source == MATCH_SOURCE_OSM:
+            match_reason = MATCH_REASON_OSM_ONLY
+        elif status == 'missing':
+            match_reason = 'legacy_missing'
+        else:
+            match_reason = 'legacy_record'
+    normalized['match_reason'] = match_reason
+
+    return normalized
+
+
 def _candidate_address_blob(candidate: Dict[str, Any]) -> str:
     parts = [
         candidate.get('nameZH', ''),
@@ -606,29 +788,15 @@ def has_suspicious_osm_candidate(
         return False
 
     for candidate in candidates:
-        candidate_name = candidate.get('name', '')
-        candidate_name_en = candidate.get('name_en', '')
-        candidate_address = candidate.get('address', '') or ''
-        name_score = max(
-            name_similarity(name_tc, candidate_name),
-            name_similarity(name_en, candidate_name),
-            name_similarity(name_tc, candidate_name_en),
-            name_similarity(name_en, candidate_name_en),
+        decision = _candidate_match_score(
+            fehd_address,
+            dist_code,
+            name_tc,
+            name_en,
+            candidate,
         )
-        address_score = address_agreement_score(fehd_address, candidate_address)
-        candidate_district = candidate.get('_district')
-
-        if candidate_district == dist_code:
-            if name_score < 0.2:
-                continue
-            if address_conflicts(fehd_address, candidate_address) or address_score < 0.3:
-                return True
-            continue
-
-        if candidate_district and candidate_district != dist_code:
-            if name_score < 0.75:
-                continue
-            if address_conflicts(fehd_address, candidate_address) or address_score < 0.3:
+        if decision['reason'] in {'address_conflict', 'district_conflict', 'address_weak'}:
+            if decision['name_score'] >= 0.85:
                 return True
 
     return False
@@ -694,6 +862,7 @@ def merge(
             osm_name_index[normalize_name(p['name_en'])].append(p)
 
     matched_osm_ids: set = set()
+    rejected_osm_ids: set = set()
     results: List[MergedRestaurant] = []
     fehd_matched = 0
     fehd_unmatched = 0
@@ -708,57 +877,53 @@ def merge(
 
         best_match: Optional[ParsedOsmPlace] = None
         best_score = 0.0
+        best_match_reason = MATCH_REASON_EXACT
+        best_match_confidence = 0.0
+        conflict_reason: Optional[str] = None
         fehd_address = fehd.get('address_tc', '') or fehd.get('address', '')
-        fehd_tokens = tokenize_address(fehd_address)
         fehd_name_norms = {normalize_name(name_tc), normalize_name(name_en)}
+
+        def consider_candidate(candidate: ParsedOsmPlace) -> None:
+            nonlocal best_match, best_score, best_match_reason, best_match_confidence, conflict_reason
+
+            candidate_osm_id = str(candidate.get('osm_id', '')).strip()
+            if not candidate_osm_id or candidate_osm_id in matched_osm_ids:
+                return
+
+            decision = _candidate_match_score(
+                fehd_address,
+                dist_code,
+                name_tc,
+                name_en,
+                candidate,
+            )
+
+            if decision['eligible']:
+                score = float(decision['confidence'])
+                if score > best_score:
+                    best_score = score
+                    best_match = candidate
+                    best_match_reason = str(decision['reason'])
+                    best_match_confidence = score
+                return
+
+            if decision.get('quarantine'):
+                if candidate_osm_id:
+                    rejected_osm_ids.add(candidate_osm_id)
+                    conflict_reason = conflict_reason or str(decision.get('reason', 'conflict'))
 
         for norm_name in fehd_name_norms:
             if norm_name and norm_name in osm_name_index:
                 for candidate in osm_name_index[norm_name]:
-                    score = name_similarity(name_tc, candidate['name'])
-                    if score > best_score and candidate['osm_id'] not in matched_osm_ids:
-                        candidate_address = candidate.get('address', '') or ''
-                        address_score = address_agreement_score(fehd_address, candidate_address)
-                        candidate_tokens = tokenize_address(candidate_address)
-                        district_ok = (
-                            candidate['_district'] == dist_code
-                            or haversine_km(
-                                dist_info['center'][0], dist_info['center'][1],
-                                candidate['lat'], candidate['lng'],
-                            ) < 5
-                        )
-                        same_name = score >= 0.84
-                        address_ok = (
-                            address_score >= 0.32
-                            or not fehd_tokens
-                            or not candidate_tokens
-                        )
-                        if district_ok and same_name and address_ok:
-                            best_score = score + address_score * 0.2
-                            best_match = candidate
+                    consider_candidate(candidate)
 
         if not best_match and dist_code:
             for candidate in osm_by_district.get(dist_code, []):
-                if candidate['osm_id'] in matched_osm_ids:
-                    continue
-                score = name_similarity(name_tc, candidate['name'])
-                candidate_address = candidate.get('address', '') or ''
-                address_score = address_agreement_score(fehd_address, candidate_address)
-                candidate_tokens = tokenize_address(candidate_address)
-                district_mismatch = bool(candidate.get('_district')) and candidate['_district'] != dist_code
-                same_name = score >= 0.84
-                address_ok = (
-                    address_score >= 0.3
-                    or not fehd_tokens
-                    or not candidate_tokens
-                )
-                if score > best_score and same_name and address_ok and not district_mismatch:
-                    best_score = score + address_score * 0.2
-                    best_match = candidate
+                consider_candidate(candidate)
 
-        if best_match and best_score > 0.5 and not address_conflicts(fehd_address, best_match.get('address', '')):
+        if best_match and best_score > 0.5:
             fehd_matched += 1
-            matched_osm_ids.add(best_match['osm_id'])
+            matched_osm_ids.add(str(best_match['osm_id']))
             results.append({
                 'id': f'fehd_{licno}',
                 'name': name_tc or best_match['name'],
@@ -785,6 +950,11 @@ def merge(
                 'source': 'fehd+osm',
                 'business_status': best_match.get('business_status', ''),
                 'permanently_closed': best_match.get('permanently_closed', False),
+                **_match_metadata(
+                    MATCH_SOURCE_FEHD_OSM,
+                    best_match_confidence,
+                    best_match_reason,
+                ),
             })
         else:
             # Skip records with empty names entirely
@@ -803,17 +973,23 @@ def merge(
                 suspicious_candidates,
             ):
                 approx_coords = fetch_fehd_approximate_coords(
-                    fehd_address,
-                    dist_code,
-                    DISTRICT_MAP.get(dist_code, {}).get('en', ''),
-                    name_tc,
-                    name_en,
-                )
+                fehd_address,
+                dist_code,
+                DISTRICT_MAP.get(dist_code, {}).get('en', ''),
+                name_tc,
+                name_en,
+            )
 
             if approx_coords is not None:
                 fehd_approximate += 1
             else:
                 fehd_unmatched += 1
+
+            approximate_reason = MATCH_REASON_APPROXIMATE if approx_coords else MATCH_REASON_MISSING
+            if conflict_reason:
+                approximate_reason = f'{approximate_reason}:{conflict_reason}'
+            elif best_match_reason and best_match_reason != MATCH_REASON_EXACT:
+                approximate_reason = f'{approximate_reason}:{best_match_reason}'
             results.append({
                 'id': f'fehd_{licno}',
                 'name': name_tc or name_en,
@@ -836,11 +1012,17 @@ def merge(
                 'source': 'fehd',
                 'business_status': '',
                 'permanently_closed': False,
+                **_match_metadata(
+                    MATCH_SOURCE_FEHD_ALS if approx_coords else MATCH_SOURCE_FEHD,
+                    0.55 if approx_coords else 0.0,
+                    approximate_reason,
+                ),
             })
 
     osm_only = 0
     for p in osm_places:
-        if p['osm_id'] not in matched_osm_ids:
+        osm_id = str(p['osm_id'])
+        if osm_id not in matched_osm_ids and osm_id not in rejected_osm_ids:
             osm_only += 1
             dinfo: Dict[str, str] = (
                 DISTRICT_MAP.get(p['_district'], {})
@@ -867,6 +1049,11 @@ def merge(
                 'source': 'osm',
                 'business_status': p.get('business_status', ''),
                 'permanently_closed': p.get('permanently_closed', False),
+                **_match_metadata(
+                    MATCH_SOURCE_OSM,
+                    0.9 if p.get('address') else 0.8,
+                    MATCH_REASON_OSM_ONLY,
+                ),
             })
 
     logger.info('  FEHD+OSM matched: %d', fehd_matched)
@@ -875,6 +1062,7 @@ def merge(
     logger.info('  FEHD empty-name (excluded): %d', fehd_empty_name)
     logger.info('  OSM-only (new places): %d', osm_only)
     logger.info('  OSM quarantined: %d', osm_quarantined)
+    logger.info('  OSM conflict-quarantined: %d', len(rejected_osm_ids))
     logger.info('  Total: %d', len(results))
     return [
         r for r in results
@@ -896,7 +1084,7 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
         by_district[r['district']].append(r)
 
     index: Dict[str, Any] = {
-        'v': 4,
+        'v': 5,
         'total': len(restaurants),
         'districts': {},
     }
@@ -905,6 +1093,9 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
     total_with_phone = 0
     total_with_hours = 0
     status_counts: Dict[str, int] = defaultdict(int)
+    match_source_counts: Dict[str, int] = defaultdict(int)
+    match_confidence_sum = 0.0
+    match_confidence_count = 0
 
     for district, records in by_district.items():
         safe_name = district.replace('/', '_').replace(' ', '_').lower()
@@ -912,23 +1103,29 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
 
         rows: List[List[Any]] = []
         for r in records:
+            normalized_record = _normalize_output_metadata(r)
             row = []
             for f in FIELDS:
-                val = r.get(f, '')
+                val = normalized_record.get(f, '')
                 if val is None:
                     val = None if f in ('lat', 'lng') else ''
                 row.append(val)
             rows.append(row)
-            if r.get('cuisine'):
+            if normalized_record.get('cuisine'):
                 total_with_cuisine += 1
-            if r.get('phone'):
+            if normalized_record.get('phone'):
                 total_with_phone += 1
-            if r.get('opening_hours'):
+            if normalized_record.get('opening_hours'):
                 total_with_hours += 1
-            status_counts[str(r.get('location_status', 'missing'))] += 1
+            status_counts[str(normalized_record.get('location_status', 'missing'))] += 1
+            match_source_counts[str(normalized_record.get('match_source', ''))] += 1
+            match_confidence = normalized_record.get('match_confidence')
+            if isinstance(match_confidence, (int, float)):
+                match_confidence_sum += float(match_confidence)
+                match_confidence_count += 1
 
         chunk: Dict[str, Any] = {
-            'v': 4,
+            'v': 5,
             'district': district,
             'count': len(records),
             'fields': FIELDS,
@@ -954,6 +1151,12 @@ def write_chunks(restaurants: List[MergedRestaurant]) -> None:
             'with_phone': total_with_phone,
             'with_hours': total_with_hours,
             'location_status': dict(status_counts),
+            'match_source': dict(match_source_counts),
+            'match_confidence_avg': (
+                round(match_confidence_sum / match_confidence_count, 3)
+                if match_confidence_count
+                else 0.0
+            ),
         }
         json.dump(index, f, ensure_ascii=False, indent=2)
 
@@ -994,7 +1197,7 @@ def main() -> None:
         sys.exit(1)
 
     osm = fetch_overpass()
-    results = merge(fehd, osm, allow_approximate=False)
+    results = merge(fehd, osm, allow_approximate=True)
     write_chunks(results)
 
     logger.info('Done.')

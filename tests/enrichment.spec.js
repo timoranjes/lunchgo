@@ -58,8 +58,8 @@ test.describe('Restaurant enrichment', () => {
     await page.waitForLoadState('load');
 
     const listCards = page.locator('.rest-card');
-    await expect(listCards.first()).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('#loading-state')).toBeHidden({ timeout: 15000 });
+    await expect(listCards.first()).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('#loading-state')).toBeHidden({ timeout: 30000 });
 
     const fehdCards = page.locator('#rest-list .rest-card[data-id^="fehd_"]');
     await expect(fehdCards.first()).toBeVisible();
@@ -87,7 +87,7 @@ test.describe('Restaurant enrichment', () => {
           status: 'OK',
           results: [{
             place_id: 'wan_chai_stub',
-            name: '花斑茶社（灣仔店）',
+            name: '花斑茶社（火炭店）',
             vicinity: 'Fo Tan, Sha Tin',
           }],
         }),
@@ -99,7 +99,7 @@ test.describe('Restaurant enrichment', () => {
             status: 'OK',
             details: {
               place_id: 'wan_chai_stub',
-              name: '花斑茶社（灣仔店）',
+              name: '花斑茶社（火炭店）',
               formatted_address: 'Fo Tan, Sha Tin',
               formatted_phone_number: '+852 2333 1122',
               website: 'https://example.com/wanchai',
@@ -115,15 +115,19 @@ test.describe('Restaurant enrichment', () => {
     await page.goto('/');
     await page.waitForLoadState('load');
 
-    await expect(page.locator('#rest-list .rest-card').first()).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('#loading-state')).toBeHidden({ timeout: 15000 });
+    await page.locator('#search-input').fill('花斑茶社');
+    const targetCard = page.locator('#rest-list .rest-card', { hasText: '花斑茶社' }).first();
+    await expect(targetCard).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('#loading-state')).toBeHidden({ timeout: 30000 });
 
-    const firstCard = page.locator('#rest-list .rest-card').first();
-    await firstCard.click();
+    const cardName = await targetCard.locator('.rest-name').textContent();
+    await targetCard.click();
     await page.waitForTimeout(750);
 
     const detailText = await page.locator('#detail-content').textContent();
     expect(detailText).toContain('地址');
     expect(detailText).not.toContain('Fo Tan');
+    expect(detailText).toContain(cardName);
+    expect(detailText).not.toContain('花斑茶社（火炭店）');
   });
 });

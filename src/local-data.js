@@ -308,6 +308,34 @@ export function parseCompactRecord(row, fields) {
 
   const businessStatus = String(obj.business_status || obj.businessStatus || '').trim();
   const permanentlyClosed = obj.permanently_closed === true || obj.permanently_closed === 'true';
+  const rawMatchSource = String(obj.match_source || obj.matchSource || '').trim();
+  const matchSource = rawMatchSource || (
+    inferredSource === 'places' ? 'places' :
+    inferredSource === 'osm' ? 'osm' :
+    inferredSource === 'fehd+osm' ? 'fehd+osm' :
+    inferredSource === 'fehd' ? 'fehd' : 'legacy'
+  );
+  const rawMatchConfidence = obj.match_confidence ?? obj.matchConfidence;
+  const parsedMatchConfidence = rawMatchConfidence === null || rawMatchConfidence === undefined || rawMatchConfidence === ''
+    ? NaN
+    : Number(rawMatchConfidence);
+  const matchConfidence = Number.isFinite(parsedMatchConfidence)
+    ? parsedMatchConfidence
+    : (
+      inferredStatus === 'exact'
+        ? (matchSource === 'fehd+osm' ? 0.95 : matchSource === 'places' ? 1 : 0.9)
+        : inferredStatus === 'approximate'
+          ? 0.55
+          : 0.0
+    );
+  const rawMatchReason = String(obj.match_reason || obj.matchReason || '').trim();
+  const matchReason = rawMatchReason || (
+    matchSource === 'fehd+osm' ? 'legacy_exact_match' :
+    matchSource === 'fehd+als' ? 'legacy_approximate_lookup' :
+    matchSource === 'osm' ? 'legacy_osm_only' :
+    inferredStatus === 'approximate' ? 'legacy_approximate' :
+    inferredStatus === 'missing' ? 'legacy_missing' : 'legacy_record'
+  );
 
   return {
     id: id,
@@ -334,6 +362,9 @@ export function parseCompactRecord(row, fields) {
     location_status: inferredStatus,
     business_status: businessStatus,
     permanently_closed: permanentlyClosed,
+    match_source: matchSource,
+    match_confidence: matchConfidence,
+    match_reason: matchReason,
     enrichment_status: inferredSource === 'places' ? 'ready' : 'pending',
   };
 }

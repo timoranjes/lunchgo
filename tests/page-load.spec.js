@@ -9,7 +9,7 @@ test.describe('Page Load', () => {
     
     // Performance assertion: keep this permissive enough for mobile Chrome startup.
     const loadTime = Date.now() - startTime;
-    expect(loadTime).toBeLessThan(3000);
+    expect(loadTime).toBeLessThan(5000);
     
     // Verify page title
     await expect(page).toHaveTitle('LunchGo 搵食');

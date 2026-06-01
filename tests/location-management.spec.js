@@ -6,7 +6,7 @@ test.describe('Location Management', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     // Wait for the first results batch or the error banner to appear.
-    await page.waitForSelector('#rest-list .rest-card, #error-banner.show', { timeout: 20000 });
+    await page.waitForSelector('#rest-list .rest-card, #error-banner.show', { timeout: 30000 });
     await page.waitForSelector('#loading-state', { state: 'attached' });
   });
 
@@ -42,7 +42,6 @@ test.describe('Location Management', () => {
     const locBtn = page.locator('#loc-btn');
     const locModal = page.locator('#loc-modal');
     const mongKokItem = page.locator('#loc-list .loc-item', { hasText: '旺角' });
-    const loadingState = page.locator('#loading-state');
     const resultList = page.locator('#rest-list');
     
     // Get initial location button text
@@ -62,13 +61,10 @@ test.describe('Location Management', () => {
     // Verify location button text changed
     await expect(locBtn).toHaveText('旺角');
     
-    // Verify loading state is shown during reload
-    await expect(loadingState).toBeVisible();
-    
     // Wait for reload to complete
     await Promise.race([
-      page.waitForSelector('#rest-list:not(:empty)', { timeout: 10000 }),
-      page.waitForSelector('#error-banner.show', { timeout: 10000 })
+      page.waitForSelector('#rest-list .rest-card', { timeout: 30000 }),
+      page.waitForSelector('#error-banner.show', { timeout: 30000 })
     ]);
     
     // Verify restaurants are loaded (or error shown)

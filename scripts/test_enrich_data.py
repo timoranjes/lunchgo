@@ -399,6 +399,9 @@ class TestMergeLogic:
         assert restaurant['cuisine'] == 'chinese'
         assert restaurant['phone'] == '+852 1234 5678'
         assert restaurant['source'] == 'fehd+osm'
+        assert restaurant['match_source'] == 'fehd+osm'
+        assert restaurant['match_confidence'] >= 0.9
+        assert restaurant['match_reason'].startswith('exact_match:')
 
     def test_merge_fehd_only_no_match(self):
         fehd_data = {
@@ -435,6 +438,9 @@ class TestMergeLogic:
         assert fehd_record['source'] == 'fehd'
         assert fehd_record['lat'] is None
         assert fehd_record['lng'] is None
+        assert fehd_record['match_source'] == 'fehd'
+        assert fehd_record['match_confidence'] == 0.0
+        assert fehd_record['match_reason'] == 'no_safe_match'
 
     def test_merge_does_not_geocode_for_unrelated_osm_candidate(self):
         fehd_data = {
@@ -496,6 +502,9 @@ class TestMergeLogic:
         assert osm_record['district'] == 'Mong Kok'
         assert osm_record['district_tc'] == '旺角'
         assert osm_record['source'] == 'osm'
+        assert osm_record['match_source'] == 'osm'
+        assert osm_record['match_confidence'] >= 0.8
+        assert osm_record['match_reason'] == 'osm_only'
 
     def test_merge_empty_inputs(self):
         result = merge({}, [])
@@ -529,6 +538,8 @@ class TestMergeLogic:
         assert len(result) == 1
         merged = result[0]
         assert merged['source'] == 'fehd+osm'
+        assert merged['match_source'] == 'fehd+osm'
+        assert merged['match_confidence'] >= 0.8
 
     def test_merge_rejects_conflicting_fehd_osm_match(self):
         fehd_data = {
@@ -560,15 +571,18 @@ class TestMergeLogic:
         with patch('enrich_data.fetch_fehd_approximate_coords', return_value=(22.4167715, 114.2277168)):
             result = merge(fehd_data, osm_elements)
 
-        assert len(result) == 2
+        assert len(result) == 1
         fehd_record = next(r for r in result if r['id'] == 'fehd_2297001018')
         assert fehd_record['source'] == 'fehd'
         assert fehd_record['location_status'] == 'approximate'
         assert fehd_record['lat'] == 22.4167715
         assert fehd_record['lng'] == 114.2277168
         assert '恒安邨' in fehd_record['address']
-        osm_record = next(r for r in result if r['id'] == 'osm_4796652881')
-        assert osm_record['name'] == '粵菜館'
+        assert fehd_record['match_source'] == 'fehd+als'
+        assert fehd_record['match_confidence'] == 0.55
+        assert fehd_record['match_reason'].startswith('approximate_lookup:')
+        assert 'conflict' in fehd_record['match_reason']
+        assert all(r['id'] != 'osm_4796652881' for r in result)
 
     def test_merge_rejects_address_conflicting_exact_match(self):
         fehd_data = {
@@ -607,6 +621,9 @@ class TestMergeLogic:
         assert fehd_record['lat'] == 22.2788
         assert fehd_record['lng'] == 114.1740
         assert '灣仔' in fehd_record['address']
+        assert fehd_record['match_source'] == 'fehd+als'
+        assert fehd_record['match_confidence'] == 0.55
+        assert fehd_record['match_reason'] == 'approximate_lookup'
         assert all(r['id'] != 'osm_10115247867' for r in result)
 
     def test_merge_quarantines_known_bad_osm_record(self):
@@ -743,7 +760,7 @@ class TestOutputFormat:
                 
                 with open(central_file, 'r', encoding='utf-8') as f:
                     central_data = json.load(f)
-                assert central_data['v'] == 4
+                assert central_data['v'] == 5
                 assert central_data['district'] == 'Central/Western'
                 assert central_data['count'] == 1
                 assert central_data['fields'] == FIELDS
@@ -754,18 +771,23 @@ class TestOutputFormat:
                 assert row1[2] == 'Test Restaurant 1 EN'
                 assert row1[3] == 22.285
                 assert row1[4] == 114.150
-                assert row1[16] == ''
+                assert row1[16] == 'exact'
                 assert row1[17] == ''
                 assert row1[18] == ''
+                assert row1[19] == 'fehd+osm'
+                assert row1[20] == 0.95
+                assert row1[21] == 'legacy_exact_match'
                 
                 with open(index_file, 'r', encoding='utf-8') as f:
                     index_data = json.load(f)
-                assert index_data['v'] == 4
+                assert index_data['v'] == 5
                 assert index_data['total'] == 2
                 assert 'Central/Western' in index_data['districts']
                 assert 'Wan Chai' in index_data['districts']
                 assert index_data['districts']['Central/Western']['count'] == 1
                 assert index_data['districts']['Wan Chai']['count'] == 1
+                assert 'match_source' in index_data['stats']
+                assert 'match_confidence_avg' in index_data['stats']
 
     def test_write_chunks_handles_special_district_names(self):
         restaurants = [

@@ -462,6 +462,9 @@ function buildRestaurantFromPlace(p) {
     enrichment_status: 'pending',
     business_status: businessStatus,
     permanently_closed: p.permanently_closed === true || isClosedStatus,
+    match_source: 'places',
+    match_confidence: 1,
+    match_reason: 'nearby_search',
   };
 }
 
@@ -479,6 +482,7 @@ function buildEnrichmentPayload(place) {
     place_id: place.place_id || '',
     name: place.name || '',
     name_en: place.name || '',
+    address: place.formatted_address || place.vicinity || '',
     rating: place.rating || 0,
     user_ratings_total: place.user_ratings_total || 0,
     price_level: place.price_level || 0,
@@ -659,8 +663,12 @@ async function enrichRestaurantData(placesService, restaurant, options = {}) {
       ...details,
       place_id: matchedPlace?.place_id || restaurant.place_id || '',
       name: details.name || matchedPlace?.name || restaurant.name,
+      formatted_address: details.formatted_address || matchedPlace?.vicinity || restaurant.address || '',
     });
-    applyEnrichmentPayload(restaurant, payload, { keepExistingCoordinates: true });
+    applyEnrichmentPayload(restaurant, payload, {
+      keepExistingCoordinates: true,
+      preserveCanonicalFields: String(restaurant?.source || '').trim() !== 'places',
+    });
     writeEnrichmentCache(cacheKey, payload);
     return {
       restaurant,
@@ -701,15 +709,32 @@ async function fetchRestaurantEnrichment(placesService, restaurant, options = {}
  * @param {Record<string, any>} payload
  * @param {object} [options]
  * @param {boolean} [options.keepExistingCoordinates=false]
+ * @param {boolean} [options.preserveCanonicalFields=true]
  * @returns {Restaurant}
  */
 function applyEnrichmentPayload(restaurant, payload, options = {}) {
   const keepExistingCoordinates = options.keepExistingCoordinates || false;
-  const preserveAddress = options.preserveAddress !== false;
+  const source = String(restaurant?.source || '').trim();
+  const preserveCanonicalFields = options.preserveCanonicalFields !== undefined
+    ? options.preserveCanonicalFields
+    : source !== 'places';
+  const preserveAddress = options.preserveAddress !== undefined
+    ? options.preserveAddress
+    : preserveCanonicalFields;
 
-  restaurant.name = payload.name || restaurant.name || '';
-  restaurant.name_en = payload.name_en || restaurant.name_en || restaurant.name || '';
-  if (!preserveAddress && payload.address) {
+  if (payload.name && (!preserveCanonicalFields || !restaurant.name)) {
+    restaurant.name = payload.name;
+  } else if (!restaurant.name && payload.name) {
+    restaurant.name = payload.name;
+  }
+
+  if (payload.name_en && (!preserveCanonicalFields || !restaurant.name_en)) {
+    restaurant.name_en = payload.name_en;
+  } else if (!restaurant.name_en && restaurant.name) {
+    restaurant.name_en = restaurant.name;
+  }
+
+  if (payload.address && (!preserveAddress || !restaurant.address)) {
     restaurant.address = payload.address;
   }
   restaurant.rating = payload.rating || restaurant.rating || 0;

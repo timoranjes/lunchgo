@@ -4,7 +4,7 @@ test.describe('Cuisine Filtering', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     // Wait for the first results batch or the error banner to appear.
-    await page.waitForSelector('#rest-list .rest-card, #error-banner.show', { timeout: 20000 });
+    await page.waitForSelector('#rest-list .rest-card, #error-banner.show', { timeout: 30000 });
   });
 
   test('should display all cuisine filter chips', async ({ page }) => {

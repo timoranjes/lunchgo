@@ -108,6 +108,9 @@
  * @property {number} [distance] - Computed distance in meters from current location
  * @property {string} [business_status] - Google Places business status if available
  * @property {boolean} [permanently_closed] - Legacy closure flag from Google Places
+ * @property {string} [match_source] - Merge provenance label from the data pipeline
+ * @property {number} [match_confidence] - Match confidence from 0 to 1
+ * @property {string} [match_reason] - Human-readable merge reason or conflict note
  */
 
 /**
@@ -225,7 +228,7 @@
  * District index manifest structure.
  *
  * @typedef {Object} DistrictIndex
- * @property {number} v - Schema version (currently 4)
+ * @property {number} v - Schema version (currently 5)
  * @property {number} total - Total restaurant count across all districts
  * @property {Object.<string, DistrictEntry>} districts - Map of district name to entry
  * @property {DistrictIndexStats} [stats] - Optional aggregate stats
