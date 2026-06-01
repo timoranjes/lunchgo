@@ -55,6 +55,9 @@ test.describe('Page Load', () => {
     if (hasRestaurants) {
       await expect(page.locator('#loading-state')).toBeHidden({ timeout: 10000 });
       await expect(page.locator('#result-count')).toContainText('間餐廳');
+      await page.waitForSelector('#discovery-scroll .discovery-card', { timeout: 10000 });
+      await expect(page.locator('#discovery-section')).toBeVisible();
+      await expect(page.locator('#discovery-subtitle')).not.toContainText('4.7+');
     }
   });
 });

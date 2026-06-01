@@ -372,13 +372,51 @@ export function renderSkeletonCards(count) {
 }
 
 /**
+ * Render the distance label used in restaurant card meta rows.
+ *
+ * @param {string} dist - Pre-formatted distance string
+ * @returns {string} HTML string
+ */
+function renderDistanceInfo(dist) {
+  if (!dist) return '';
+  return (
+    '<span class="rest-info-item rest-distance-item">' +
+    '<span class="rest-distance-label">距你</span>' +
+    '<span class="rest-distance-value">' +
+    escHtml(dist) +
+    '</span>' +
+    '</span>'
+  );
+}
+
+/**
+ * Resolve the distance text for a restaurant card.
+ *
+ * Prefer a precomputed distance when available, otherwise compute it from the
+ * current location so patched cards keep showing the same information.
+ *
+ * @param {import('./types.js').Restaurant} restaurant
+ * @returns {string}
+ */
+function resolveRestaurantDistanceText(restaurant) {
+  if (Number.isFinite(restaurant?.distance)) {
+    return formatDist(restaurant.distance);
+  }
+
+  const loc = state.currentLocation;
+  if (!loc || !hasValidCoordinates(restaurant)) return '';
+
+  return formatDist(getRestaurantDistance(restaurant, loc));
+}
+
+/**
  * Generate HTML for a single restaurant card (list view).
  *
  * @param {import('./types.js').Restaurant} r - Restaurant object
  * @returns {string} HTML string
  */
 export function renderCardTemplate(r) {
-  const dist = Number.isFinite(r.distance) ? formatDist(r.distance) : '';
+  const dist = resolveRestaurantDistanceText(r);
   const district = r.district_tc || r.district || '';
   const stars = r.rating ? renderStars(r.rating) : '';
   const price = r.price_level ? priceLevel(r.price_level) : '';
@@ -439,7 +477,7 @@ export function renderCardTemplate(r) {
         '</div>'
       : '') +
     '<div class="rest-info">' +
-    (dist ? '<span class="rest-info-item">' + escHtml(dist) + '</span>' : '') +
+    renderDistanceInfo(dist) +
     (price ? '<span class="rest-info-item">' + escHtml(price) + '</span>' : '') +
     '</div>' +
     '<div class="rest-tags">' +
@@ -458,7 +496,7 @@ export function renderCardTemplate(r) {
  * @returns {string} HTML string
  */
 export function renderDiscoveryCardTemplate(r) {
-  const dist = Number.isFinite(r.distance) ? formatDist(r.distance) : '';
+  const dist = resolveRestaurantDistanceText(r);
   let imgHtml = '';
   if (r.photos && r.photos.length > 0) {
     imgHtml =
@@ -505,6 +543,7 @@ export function renderDiscoveryCardTemplate(r) {
  * @returns {string} HTML string
  */
 export function renderFavCardTemplate(r, dist) {
+  const distText = dist || resolveRestaurantDistanceText(r);
   const district = r.district_tc || r.district || '';
   const stars = r.rating ? renderStars(r.rating) : '';
   const price = r.price_level ? priceLevel(r.price_level) : '';
@@ -525,7 +564,7 @@ export function renderFavCardTemplate(r, dist) {
   let tags = '';
   if (district) tags += '<span class="tag tag-district">' + escHtml(district) + '</span>';
   if (locationStatus) tags += '<span class="tag tag-status">' + escHtml(locationStatus) + '</span>';
-  if (dist) tags += '<span class="tag tag-distance">' + escHtml(dist) + '</span>';
+  if (distText) tags += '<span class="tag tag-distance">' + escHtml(distText) + '</span>';
   if (r.cuisine)
     tags += '<span class="tag tag-cuisine">' + escHtml(r.cuisine.split(',')[0]) + '</span>';
 
@@ -561,7 +600,7 @@ export function renderFavCardTemplate(r, dist) {
         '</div>'
       : '') +
     '<div class="rest-info">' +
-    (dist ? '<span class="rest-info-item">' + escHtml(dist) + '</span>' : '') +
+    renderDistanceInfo(distText) +
     (price ? '<span class="rest-info-item">' + escHtml(price) + '</span>' : '') +
     '</div>' +
     '<div class="rest-tags">' +
@@ -734,29 +773,39 @@ export function renderDiscovery(list) {
 
   if (!section || !scroll || !subtitle) return;
 
-  const currentRated = list.filter((r) => Number.isFinite(r.rating) && Number(r.rating) >= 4.7 && isDisplayableRestaurant(r));
-  const fallbackRated = state.placesData.filter((r) => Number.isFinite(r.rating) && Number(r.rating) >= 4.7 && isDisplayableRestaurant(r));
-  const rated = currentRated.length > 0 ? currentRated : fallbackRated;
+  const displayable = list.filter(isDisplayableRestaurant);
+  const rated = displayable.filter((r) => Number.isFinite(r.rating) && Number(r.rating) > 0);
+  const source = rated.length > 0 ? rated : displayable;
 
-  if (rated.length === 0) {
+  if (source.length === 0) {
     section.style.display = 'none';
     return;
   }
 
   section.style.display = '';
 
-  const sorted = [...rated].sort((a, b) => {
-    if (b.rating !== a.rating) return b.rating - a.rating;
-    return (b.user_ratings_total || 0) - (a.user_ratings_total || 0);
-  });
+  const sorted = rated.length > 0
+    ? [...source].sort((a, b) => {
+        if (b.rating !== a.rating) return b.rating - a.rating;
+        return (b.user_ratings_total || 0) - (a.user_ratings_total || 0);
+      })
+    : [...source].sort((a, b) => {
+        const distanceDelta = getDistanceSortValue(a.distance) - getDistanceSortValue(b.distance);
+        if (distanceDelta !== 0) return distanceDelta;
+        return (a.name || '').localeCompare(b.name || '');
+      });
 
   const top = sorted.slice(0, 20);
 
   if (state.activeCuisine !== 'all') {
     const cuisineLabel = CUISINES.find((c) => c.id === state.activeCuisine);
-    subtitle.textContent = (cuisineLabel ? cuisineLabel.label : '') + ' 4.7+ 高分餐廳';
+    subtitle.textContent = rated.length > 0
+      ? (cuisineLabel ? cuisineLabel.label : '') + '高分餐廳'
+      : (cuisineLabel ? cuisineLabel.label : '') + '附近餐廳';
   } else {
-    subtitle.textContent = '評分 4.7+';
+    subtitle.textContent = rated.length > 0
+      ? '評分 ' + top[0].rating.toFixed(1) + ' 起'
+      : '附近推薦';
   }
 
   scroll.innerHTML = top.map(renderDiscoveryCardTemplate).join('');

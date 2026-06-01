@@ -76,6 +76,15 @@ test.describe('Location Management', () => {
     const hasError = await page.locator('#error-banner.show').isVisible();
     expect(hasRestaurants || hasError).toBe(true);
   });
+
+  test('should show distance on restaurant cards in list view', async ({ page }) => {
+    const firstCard = page.locator('#rest-list .rest-card').first();
+    const distanceItem = firstCard.locator('.rest-distance-item');
+
+    await expect(distanceItem).toBeVisible();
+    await expect(distanceItem).toContainText('距你');
+    await expect(distanceItem.locator('.rest-distance-value')).toHaveText(/^\d+(?:\.\d)?(?:m|km)$/);
+  });
   
   test('should close location modal when clicking outside', async ({ page }) => {
     const locBtn = page.locator('#loc-btn');
