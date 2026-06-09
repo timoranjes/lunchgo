@@ -1,13 +1,12 @@
-# PROJECT KNOWLEDGE BASE
+# AGENTS.md — projects/lunchgo/
 
-**Generated:** 2026-05-22
-**Commit:** 9a6e640
-**Branch:** main
-
-## OVERVIEW
+## Scope
 LunchGo 搵食 — H5 mobile web app for finding lunch spots in Hong Kong. Single-file vanilla JS SPA using Google Maps + Places API. Python data pipeline fetches FEHD government licenses + OpenStreetMap data.
 
-## STRUCTURE
+**Last updated:** 2026-06-09
+**Status:** Active — deployed, daily data refresh via GitHub Actions
+
+## Structure
 ```
 lunchgo/
 ├── index.html              # ENTIRE APP — HTML + CSS + JS (1952 lines)
@@ -18,6 +17,24 @@ lunchgo/
 └── .github/workflows/
     └── update-restaurants.yml # Daily cron (2AM UTC) → runs enrich_data.py → commits
 ```
+
+## Commands
+```bash
+# Run data pipeline locally
+python scripts/enrich_data.py
+
+# Run legacy data fetcher
+python scripts/update_restaurants.py
+
+# No build/test commands — static files only
+```
+
+## Boundaries
+✅ Allowed: Edit index.html, scripts, data pipeline
+✅ Allowed: Modify GitHub Actions workflow
+❌ Never: Split index.html into multiple files (single-file architecture)
+❌ Never: Add framework (React/Vue/Svelte) or build tooling (webpack/vite)
+❌ Never: Expose Google Maps API key in public repos
 
 ## WHERE TO LOOK
 | Task | Location | Notes |
@@ -48,7 +65,7 @@ lunchgo/
 | `haversine()` | Function | index.html:728 | Distance calculation |
 | `matchCuisine()` | Function | index.html:762 | Cuisine filter with CN char matching |
 
-## CONVENTIONS
+## Conventions
 - **No build step** — edit files directly, deploy static
 - **Single-file architecture** — all HTML/CSS/JS in `index.html`
 - **CSS variables** — theming via `:root` vars (brand: `#07C160`)
@@ -57,34 +74,27 @@ lunchgo/
 - **Data format** — district JSON uses compact array format, not object-per-record
 - **Language** — Traditional Chinese (zh-TW/zh-HK) for UI text
 
-## ANTI-PATTERNS (THIS PROJECT)
-- **Do NOT split `index.html`** — architecture is intentionally single-file; no bundler exists
-- **Do NOT add framework** — vanilla JS only; no React/Vue/Svelte
-- **Do NOT add build tooling** — no webpack/vite/parcel; direct static hosting
-- **Hardcoded API key** — `GOOGLE_MAPS_API_KEY` in `index.html` line ~637 (placeholder `YOUR_API_KEY_HERE`)
-- **Error swallowing** — `catch {}` in Store.get/set (line ~700) — intentional for localStorage quota errors
-- **No tests** — zero test coverage; manual QA only
-- **Legacy data files** — `hk_restaurants.json` and `hk_restaurants_v2.json` are deprecated; use `district_*.json`
+## RESEARCH & DECISIONS
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2026-05 | Single-file architecture | No build step needed for this scale; simpler deployment |
+| 2026-05 | District-chunked data | Lazy loading for performance; 18 separate JSON files |
+| 2026-05 | FEHD + OSM merge | Government license data + OpenStreetMap for comprehensive coverage |
+| 2026-05 | Vanilla JS only | No framework overhead; target audience uses low-end phones |
 
-## UNIQUE STYLES
-- **District-chunked data** — 18 district JSON files for lazy loading (not used by current app; pipeline output)
-- **FEHD + OSM merge** — multi-strategy matching: exact name → proximity + name similarity
-- **WeChat-style UI** — green brand `#07C160`, rounded cards, mobile-first
-- **Cuisine matching** — bilingual (English types + Chinese chars in name/address)
+## KEY FINDINGS
+- FEHD (Food and Environmental Hygiene Department) publishes license data as XML
+- Overpass API (OpenStreetMap) provides restaurant locations + cuisine tags
+- Multi-strategy matching: exact name → proximity + name similarity for merging datasets
+- Google Places API used at runtime for live data; local JSON is pipeline output only
+- 17,195+ restaurants across 18 HK districts
 
-## COMMANDS
-```bash
-# Run data pipeline locally
-python scripts/enrich_data.py
+## KNOWN ISSUES
+- Google Maps API key is placeholder in index.html — needs real key for deployment
+- No test coverage — manual QA only
+- Legacy data files (hk_restaurants.json, hk_restaurants_v2.json) still in repo but deprecated
 
-# Run legacy data fetcher
-python scripts/update_restaurants.py
-
-# No build/test commands — static files only
-```
-
-## NOTES
-- Google Maps API key must be replaced in `index.html` before deployment
-- GitHub Actions runs daily at 2AM UTC; commits directly to `main`
-- Data directory contains 17,195+ restaurants across 18 HK districts
-- App uses Google Places API at runtime, NOT local JSON files (local data is pipeline output only)
+## NEXT STEPS
+- Replace API key placeholder for production
+- Consider adding user reviews/ratings
+- Expand cuisine matching accuracy
