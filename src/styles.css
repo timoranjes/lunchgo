@@ -169,6 +169,11 @@
     .rest-card-thumb img.img-error { display: none; }
     .rest-card-body { flex: 1; min-width: 0; }
     .rest-name { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+    .rest-original-name {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
     .rest-name-en { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
     .rest-rating { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
     .stars { color: var(--star); font-size: 12px; letter-spacing: 1px; }
@@ -282,6 +287,11 @@
     .detail-fav.is-fav { color: var(--red); }
     .detail-hero { padding: 24px 16px 16px; background: var(--card); }
     .detail-name { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .detail-original-name {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
     .detail-name-en { font-size: 14px; color: var(--text-muted); margin-bottom: 8px; }
     .detail-rating-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
     .detail-stars { color: var(--star); font-size: 16px; letter-spacing: 2px; }
@@ -733,6 +743,14 @@
     .discovery-card-name {
       font-size: 13px; font-weight: 600; white-space: nowrap;
       overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;
+    }
+    .discovery-card-original-name {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .discovery-card-meta { font-size: 11px; color: var(--text-muted); }
     .discovery-card-rating {

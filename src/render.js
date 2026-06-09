@@ -459,6 +459,9 @@ export function renderCardTemplate(r) {
     '<div class="rest-card-body">' +
     '<div class="rest-name">' +
     escHtml(r.name || '') +
+    (r.original_name && r.original_name !== r.name
+      ? '<div class="rest-original-name">' + escHtml(r.original_name) + '</div>'
+      : '') +
     '</div>' +
     (r.name_en && r.name_en !== r.name
       ? '<div class="rest-name-en">' + escHtml(r.name_en) + '</div>'
@@ -513,6 +516,9 @@ export function renderDiscoveryCardTemplate(r) {
     '<div class="discovery-card-body">' +
     '<div class="discovery-card-name">' +
     escHtml(r.name || '') +
+    (r.original_name && r.original_name !== r.name
+      ? '<div class="discovery-card-original-name">' + escHtml(r.original_name) + '</div>'
+      : '') +
     '</div>' +
     '<div class="discovery-card-meta">' +
     (dist ? dist + ' · ' : '') +
@@ -582,6 +588,9 @@ export function renderFavCardTemplate(r, dist) {
     '<div class="rest-card-body">' +
     '<div class="rest-name">' +
     escHtml(r.name || '') +
+    (r.original_name && r.original_name !== r.name
+      ? '<div class="rest-original-name">' + escHtml(r.original_name) + '</div>'
+      : '') +
     '</div>' +
     (r.name_en && r.name_en !== r.name
       ? '<div class="rest-name-en">' + escHtml(r.name_en) + '</div>'
@@ -1095,6 +1104,9 @@ export function showDetail(id) {
     '<div class="detail-hero">' +
     '<div class="detail-name">' +
     escHtml(r.name || '') +
+    (r.original_name && r.original_name !== r.name
+      ? '<div class="detail-original-name">' + escHtml(r.original_name) + '</div>'
+      : '') +
     '</div>' +
     (r.name_en && r.name_en !== r.name
       ? '<div class="detail-name-en">' + escHtml(r.name_en) + '</div>'

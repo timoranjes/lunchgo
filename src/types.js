@@ -84,6 +84,8 @@
  * @property {string} id - Unique ID ('place_<place_id>' or 'fehd_<id>' or 'osm_<id>')
  * @property {string} name - Primary name (Traditional Chinese or English)
  * @property {string} [name_en] - English name, may equal name
+ * @property {string} [original_name] - Original FEHD license name (when overridden by Places/OSM)
+ * @property {string} [original_name_en] - Original FEHD English name (when overridden)
  * @property {number|string} lat - Latitude (number from Places, string from JSON)
  * @property {number|string} lng - Longitude (number from Places, string from JSON)
  * @property {string} [address] - Full or partial address

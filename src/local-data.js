@@ -98,6 +98,18 @@ function mergeGooglePlaceIntoLocal(local, place) {
   local.business_status = place.business_status || local.businessStatus || local.business_status || '';
   local.permanently_closed = place.permanently_closed === true || local.permanently_closed === true;
   local.enrichment_status = local.enrichment_status || 'pending';
+
+  // Prefer Google Places name over FEHD license name — Places names match
+  // what users see on OpenRice and other review platforms.
+  if (place.name && place.name !== local.name) {
+    // Keep FEHD name as original_name for reference
+    local.original_name = local.name;
+    local.name = place.name;
+  }
+  if (place.name_en && place.name_en !== local.name_en && place.name_en !== local.name) {
+    local.original_name_en = local.name_en;
+    local.name_en = place.name_en;
+  }
 }
 
 function normalizeBusinessStatus(value) {

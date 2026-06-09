@@ -926,8 +926,12 @@ def merge(
             matched_osm_ids.add(str(best_match['osm_id']))
             results.append({
                 'id': f'fehd_{licno}',
-                'name': name_tc or best_match['name'],
-                'name_en': name_en or best_match.get('name_en', ''),
+                # Prefer OSM common name (matches OpenRice) over FEHD license name.
+                # FEHD name is preserved as original_name for reference.
+                'name': best_match['name'] if best_match.get('name') else name_tc,
+                'name_en': best_match.get('name_en', '') or name_en,
+                'original_name': name_tc if best_match.get('name') and name_tc != best_match.get('name') else '',
+                'original_name_en': name_en if best_match.get('name_en') and name_en and name_en != best_match.get('name_en', '') else '',
                 'lat': best_match['lat'],
                 'lng': best_match['lng'],
                 'address': (
