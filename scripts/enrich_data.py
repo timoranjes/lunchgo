@@ -155,6 +155,7 @@ def _http_get(url: str, timeout: int = 60) -> requests.Response:
         headers={
             'User-Agent': 'LunchGo-Bot/2.0',
             'Accept': 'application/xml',
+            'Accept-Encoding': 'gzip, deflate',
         },
         timeout=timeout,
     )
