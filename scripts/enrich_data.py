@@ -970,13 +970,7 @@ def merge(
 
             suspicious_candidates = all_osm_places
             approx_coords: Optional[Tuple[float, float]] = None
-            if allow_approximate and has_suspicious_osm_candidate(
-                fehd_address,
-                dist_code,
-                name_tc,
-                name_en,
-                suspicious_candidates,
-            ):
+            if allow_approximate:
                 approx_coords = fetch_fehd_approximate_coords(
                 fehd_address,
                 dist_code,

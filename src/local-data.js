@@ -99,16 +99,28 @@ function mergeGooglePlaceIntoLocal(local, place) {
   local.permanently_closed = place.permanently_closed === true || local.permanently_closed === true;
   local.enrichment_status = local.enrichment_status || 'pending';
 
-  // Prefer Google Places name over FEHD license name — Places names match
-  // what users see on OpenRice and other review platforms.
-  if (place.name && place.name !== local.name) {
-    // Keep FEHD name as original_name for reference
-    local.original_name = local.name;
-    local.name = place.name;
+  // Check if local name is a license ID (e.g. "12-345678") or is empty/falsy
+  const isLicenseId = (name) => /^\d{2}-\d{6}$/.test(String(name || '').trim());
+  
+  // Prefer Google Places name only if local name is empty or looks like a license ID
+  if (place.name) {
+    if (!local.name || isLicenseId(local.name)) {
+      local.original_name = local.name;
+      local.name = place.name;
+    } else {
+      // Keep local name as primary, but store Google name as reference
+      local.google_name = place.name;
+    }
   }
-  if (place.name_en && place.name_en !== local.name_en && place.name_en !== local.name) {
-    local.original_name_en = local.name_en;
-    local.name_en = place.name_en;
+  
+  if (place.name_en) {
+    if (!local.name_en || isLicenseId(local.name_en)) {
+      local.original_name_en = local.name_en;
+      local.name_en = place.name_en;
+    } else {
+      // Keep local name as primary, but store Google name as reference
+      local.google_name_en = place.name_en;
+    }
   }
 }
 
